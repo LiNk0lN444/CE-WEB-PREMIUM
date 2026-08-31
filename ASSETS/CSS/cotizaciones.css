@@ -1,0 +1,703 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Roboto', sans-serif;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+    background-image:url("../IMG/in.jpg");
+    background-size:cover;
+    background-position:center;
+    background-attachment:fixed;
+    color:white;
+    transition:0.4s;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+}
+
+/* ---------- NAVBAR ---------- */
+
+.navbar{
+    position:fixed;
+    top:0;
+    width:100%;
+    padding:15px 8%;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    backdrop-filter:blur(10px);
+    background:rgba(255,0,0,.45);
+    z-index:1000;
+}
+
+.logo{
+    font-size:24px;
+    font-weight:bold;
+    color:white;
+}
+
+.menu{
+    list-style:none;
+    display:flex;
+    gap:25px;
+}
+
+.menu a{
+    text-decoration:none;
+    color:white;
+    font-weight:600;
+    transition:.3s;
+}
+
+.menu a:hover{
+    color:#ffd1d1;
+}
+
+.acciones{
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+
+#themeBtn{
+    border:none;
+    background:white;
+    border-radius:50%;
+    width:45px;
+    height:45px;
+    font-size:18px;
+    cursor:pointer;
+    transition:.3s;
+}
+
+#themeBtn:hover{
+    transform:scale(1.1);
+}
+
+.login-btn{
+    text-decoration:none;
+    background:white;
+    color:#fd4646;
+    padding:10px 20px;
+    border-radius:8px;
+    font-weight:bold;
+    border:none;
+    cursor:pointer;
+    font-size:14px;
+}
+
+.login-btn:hover{
+    background:#fd4646;
+    color:white;
+}
+
+.nav-auth{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.nav-avatar{
+    width:42px;
+    height:42px;
+    border-radius:50%;
+    background:#fd4646;
+    color:white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:bold;
+    font-size:14px;
+    overflow:hidden;
+    border:2px solid rgba(255,255,255,.6);
+    text-decoration:none;
+    transition:.3s;
+}
+
+.nav-avatar:hover{
+    transform:scale(1.08);
+}
+
+.nav-avatar img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+}
+
+/* ---------- CONTENIDO ---------- */
+
+.cot-main{
+    flex:1;
+    max-width:1100px;
+    width:100%;
+    margin:0 auto;
+    padding:140px 20px 60px;
+}
+
+.cot-titulo{
+    text-align:center;
+    margin-bottom:30px;
+}
+
+.cot-titulo h1{
+    font-size:32px;
+    margin-bottom:8px;
+}
+
+.cot-titulo p{
+    opacity:.85;
+}
+
+/* ---------- ACCESO RESTRINGIDO ---------- */
+
+.cot-acceso-denegado{
+    max-width:520px;
+    margin:40px auto;
+    text-align:center;
+    background:rgba(0,0,0,.55);
+    backdrop-filter:blur(10px);
+    padding:40px 30px;
+    border-radius:16px;
+    border:1px solid rgba(255,255,255,.15);
+}
+
+.cot-acceso-denegado h2{
+    margin-bottom:14px;
+    color:#ff8080;
+}
+
+.cot-acceso-denegado p{
+    opacity:.9;
+    margin-bottom:24px;
+}
+
+.btn-volver{
+    display:inline-block;
+    background:#fd4646;
+    color:white;
+    padding:10px 26px;
+    border-radius:8px;
+    text-decoration:none;
+    font-weight:600;
+    transition:.3s;
+}
+
+.btn-volver:hover{
+    background:white;
+    color:#fd4646;
+}
+
+/* ---------- TABS ---------- */
+
+.cot-tabs{
+    display:flex;
+    gap:10px;
+    margin-bottom:26px;
+    flex-wrap:wrap;
+}
+
+.cot-tab-btn{
+    border:none;
+    background:rgba(255,255,255,.1);
+    color:white;
+    padding:12px 22px;
+    border-radius:12px;
+    font-size:15px;
+    cursor:pointer;
+    transition:.25s;
+}
+
+.cot-tab-btn:hover{
+    background:rgba(255,255,255,.2);
+}
+
+.cot-tab-btn.active{
+    background:#fd4646;
+    font-weight:600;
+}
+
+.cot-tab-panel{
+    display:none;
+}
+
+.cot-tab-panel.active{
+    display:block;
+}
+
+/* ---------- BLOQUES / TARJETAS ---------- */
+
+.cot-bloque{
+    background:rgba(0,0,0,.55);
+    backdrop-filter:blur(10px);
+    border-radius:16px;
+    padding:26px;
+    border:1px solid rgba(255,255,255,.12);
+    margin-bottom:24px;
+}
+
+.cot-bloque h2{
+    margin-bottom:6px;
+    font-size:20px;
+}
+
+.cot-bloque > p.cot-sub{
+    opacity:.8;
+    font-size:14px;
+    margin-bottom:18px;
+}
+
+/* ---------- FORMULARIOS ---------- */
+
+.cot-form-grid{
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:16px;
+}
+
+.cot-form-group{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+}
+
+.cot-form-group-full{
+    grid-column:1 / -1;
+}
+
+.cot-form-group label{
+    font-size:13px;
+    opacity:.85;
+}
+
+.cot-form-group input,
+.cot-form-group select,
+.cot-form-group textarea{
+    padding:10px 12px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.08);
+    color:white;
+    font-size:14px;
+    font-family:inherit;
+    outline:none;
+    transition:.2s;
+}
+
+.cot-form-group input:focus,
+.cot-form-group select:focus,
+.cot-form-group textarea:focus{
+    border-color:#fd4646;
+    background:rgba(255,255,255,.14);
+}
+
+.cot-form-group textarea{
+    resize:vertical;
+}
+
+.cot-form-group select option{
+    color:black;
+}
+
+.cot-error-msg{
+    display:block;
+    min-height:0;
+    color:#ff8080;
+    font-size:13px;
+    margin-top:10px;
+}
+
+.cot-form-actions{
+    display:flex;
+    gap:12px;
+    margin-top:20px;
+    flex-wrap:wrap;
+}
+
+.cot-btn{
+    background:#fd4646;
+    color:white;
+    border:none;
+    padding:12px 26px;
+    border-radius:10px;
+    font-weight:600;
+    cursor:pointer;
+    transition:.3s;
+    font-size:14px;
+}
+
+.cot-btn:hover{
+    background:white;
+    color:#fd4646;
+}
+
+.cot-btn:disabled{
+    opacity:.5;
+    cursor:not-allowed;
+}
+
+.cot-btn-secundario{
+    background:transparent;
+    color:white;
+    border:2px solid rgba(255,255,255,.5);
+    padding:10px 24px;
+    border-radius:10px;
+    font-weight:600;
+    cursor:pointer;
+    transition:.3s;
+    font-size:14px;
+}
+
+.cot-btn-secundario:hover{
+    background:rgba(255,255,255,.15);
+}
+
+.cot-btn-chico{
+    border:none;
+    background:rgba(255,255,255,.1);
+    color:white;
+    border-radius:6px;
+    padding:6px 10px;
+    cursor:pointer;
+    font-size:13px;
+    transition:.2s;
+    margin-right:6px;
+}
+
+.cot-btn-chico:hover{
+    background:rgba(255,255,255,.25);
+}
+
+/* ---------- SELECTOR DE ITEMS ---------- */
+
+.cot-selector-grid{
+    display:grid;
+    grid-template-columns:1.4fr .6fr .8fr auto;
+    gap:14px;
+    align-items:end;
+}
+
+.cot-precio-preview{
+    font-size:13px;
+    opacity:.8;
+    margin-top:6px;
+}
+
+/* ---------- TABLA CARRITO / LISTADOS ---------- */
+
+.cot-lista-wrap{
+    background:rgba(0,0,0,.5);
+    backdrop-filter:blur(10px);
+    border-radius:16px;
+    padding:20px;
+    border:1px solid rgba(255,255,255,.12);
+    overflow-x:auto;
+}
+
+.cot-tabla{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+}
+
+.cot-tabla th,
+.cot-tabla td{
+    text-align:left;
+    padding:10px 12px;
+    border-bottom:1px solid rgba(255,255,255,.12);
+    white-space:nowrap;
+}
+
+.cot-tabla th{
+    color:#ff8080;
+    font-weight:600;
+}
+
+.cot-vacio{
+    text-align:center;
+    opacity:.75;
+    padding:20px 0 4px;
+}
+
+/* ---------- TOTALES ---------- */
+
+.cot-totales{
+    margin-top:18px;
+    margin-left:auto;
+    max-width:320px;
+    background:rgba(255,255,255,.06);
+    border-radius:12px;
+    padding:16px 20px;
+}
+
+.cot-totales-fila{
+    display:flex;
+    justify-content:space-between;
+    padding:6px 0;
+    font-size:14px;
+}
+
+.cot-totales-fila.cot-total-final{
+    border-top:1px solid rgba(255,255,255,.2);
+    margin-top:6px;
+    padding-top:12px;
+    font-size:18px;
+    font-weight:700;
+    color:#ff8080;
+}
+
+/* ---------- BADGES DE ESTADO ---------- */
+
+.cot-badge{
+    padding:4px 10px;
+    border-radius:20px;
+    font-size:12px;
+    font-weight:600;
+    white-space:nowrap;
+    display:inline-block;
+}
+
+.cot-badge-borrador{
+    background:rgba(255,255,255,.15);
+    color:#e0e0e0;
+}
+
+.cot-badge-enviada{
+    background:rgba(255,184,77,.18);
+    color:#ffcf8a;
+}
+
+.cot-badge-aprobada{
+    background:rgba(77,255,136,.15);
+    color:#4dff88;
+}
+
+.cot-badge-rechazada{
+    background:rgba(255,77,77,.15);
+    color:#ff8080;
+}
+
+.cot-select-estado{
+    padding:6px 10px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,.25);
+    background:rgba(0,0,0,.4);
+    color:white;
+    font-size:13px;
+}
+
+.cot-select-estado option{
+    color:black;
+}
+
+/* ---------- FILTROS LISTADO ---------- */
+
+.cot-filtros{
+    display:flex;
+    gap:12px;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    align-items:center;
+}
+
+.cot-filtros input,
+.cot-filtros select{
+    padding:9px 12px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.08);
+    color:white;
+    font-size:14px;
+    outline:none;
+}
+
+.cot-filtros select option{
+    color:black;
+}
+
+/* ---------- MODAL DE DETALLE ---------- */
+
+.cot-modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.7);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:4000;
+}
+
+.cot-modal-overlay[hidden]{
+    display:none;
+}
+
+.cot-modal{
+    background:#1c1c1c;
+    border-radius:16px;
+    max-width:640px;
+    width:100%;
+    max-height:88vh;
+    overflow-y:auto;
+    padding:30px;
+    border:1px solid rgba(255,255,255,.15);
+}
+
+.cot-modal-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:16px;
+    gap:10px;
+}
+
+.cot-modal-header h3{
+    font-size:20px;
+}
+
+.cot-modal-cerrar{
+    background:rgba(255,255,255,.1);
+    border:none;
+    color:white;
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    cursor:pointer;
+    font-size:16px;
+    flex-shrink:0;
+}
+
+.cot-modal-cerrar:hover{
+    background:rgba(255,255,255,.25);
+}
+
+.cot-modal-seccion{
+    margin-bottom:16px;
+}
+
+.cot-modal-seccion h4{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    color:#ff8080;
+    margin-bottom:8px;
+}
+
+.cot-modal-datos p{
+    font-size:14px;
+    opacity:.9;
+    line-height:1.6;
+}
+
+.cot-modal-footer{
+    display:flex;
+    gap:12px;
+    margin-top:20px;
+    flex-wrap:wrap;
+}
+
+/* ---------- FOOTER ---------- */
+
+footer{
+    text-align:center;
+    padding:20px;
+    background:rgba(0,0,0,.55);
+    font-size:14px;
+}
+
+/* ---------- TOAST ---------- */
+
+.toast{
+    position:fixed;
+    bottom:30px;
+    left:50%;
+    transform:translateX(-50%) translateY(120%);
+    background:#222;
+    color:white;
+    padding:14px 26px;
+    border-radius:12px;
+    font-weight:600;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);
+    z-index:3000;
+    transition:transform .35s ease;
+    border-left:5px solid #fd4646;
+}
+
+.toast.show{
+    transform:translateX(-50%) translateY(0);
+}
+
+.toast.toast-error{
+    border-left-color:#ff4d4d;
+}
+
+.toast.toast-success{
+    border-left-color:#4dff88;
+}
+
+/* ---------- MODO OSCURO ---------- */
+
+body.dark-mode .navbar{
+    background:rgba(0,0,0,.6);
+}
+
+body.dark-mode .cot-bloque,
+body.dark-mode .cot-lista-wrap,
+body.dark-mode .cot-acceso-denegado,
+body.dark-mode .cot-modal{
+    background:rgba(0,0,0,.8);
+}
+
+/* ---------- RESPONSIVE ---------- */
+
+@media(max-width:800px){
+
+    .cot-selector-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+@media(max-width:700px){
+
+    .navbar{
+        flex-direction:column;
+        gap:10px;
+    }
+
+    .menu{
+        flex-wrap:wrap;
+        justify-content:center;
+    }
+
+    .cot-main{
+        padding-top:190px;
+    }
+
+    .cot-form-grid{
+        grid-template-columns:1fr;
+    }
+
+    .cot-totales{
+        max-width:100%;
+    }
+}
+
+/* ---------- IMPRESIÓN ---------- */
+
+@media print{
+
+    header, footer, .cot-tabs, .cot-bloque:not(.cot-imprimible),
+    .cot-modal-footer, #themeBtn{
+        display:none !important;
+    }
+
+    body{
+        background:white;
+        color:black;
+    }
+}

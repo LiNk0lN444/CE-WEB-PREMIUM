@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Perfil | CE-Web Constructora</title>
+    <link rel="shortcut icon" href="/ASSETS/IMG/ce.png" type="image/x-icon">
+    <link rel="stylesheet" href="/ASSETS/CSS/sesion.css">
+</head>
+<body>
+
+    <header>
+        <nav class="navbar">
+            <div class="logo">CE-Web Constructora</div>
+
+            <ul class="menu">
+                <li><a href="/index.html">Inicio</a></li>
+                <li><a href="/index.html#nosotros">Nosotros</a></li>
+                <li><a href="/VISTAS/catalogo.html">Catalogo</a></li>
+                <li><a href="/VISTAS/inventario.html">Inventario</a></li>
+                <li><a href="/index.html#servicios">Servicios</a></li>
+                <li><a href="/index.html#contacto">Contacto</a></li>
+            </ul>
+
+            <div class="acciones">
+                <button id="themeBtn" title="Cambiar tema">🌙</button>
+                <div class="nav-auth" id="navAuth"></div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="perfil-main">
+
+        <div class="perfil-titulo">
+            <h1>Mi Cuenta</h1>
+            <p>Administra tu información personal, seguridad y preferencias.</p>
+        </div>
+
+        <div class="perfil-container">
+
+            <!-- ===================== SIDEBAR ===================== -->
+            <aside class="perfil-sidebar">
+
+                <div class="perfil-avatar-box">
+                    <div class="avatar-circle" id="avatarCircle">
+                        <img id="avatarImg" src="" alt="Foto de perfil" hidden>
+                        <span id="avatarInitials">--</span>
+                    </div>
+
+                    <button type="button" id="btnCambiarFoto" class="btn-avatar">
+                        📷 Cambiar foto
+                    </button>
+                    <button type="button" id="btnQuitarFoto" class="btn-avatar btn-avatar-quitar" hidden>
+                        Quitar foto
+                    </button>
+                    <input type="file" id="inputAvatar" accept="image/png, image/jpeg, image/webp" hidden>
+                </div>
+
+                <h3 id="sidebarNombre">Usuario</h3>
+                <p id="sidebarEmail">correo@ejemplo.com</p>
+                <span class="badge-rol" id="sidebarRol">Cliente</span>
+                <span class="badge-estado" id="sidebarEstado">● Activo</span>
+
+                <nav class="perfil-tabs" id="perfilTabs">
+                    <button class="tab-btn active" data-tab="datos" type="button">
+                        👤 Mis Datos
+                    </button>
+                    <button class="tab-btn" data-tab="seguridad" type="button">
+                        🔒 Seguridad
+                    </button>
+                    <button class="tab-btn" data-tab="preferencias" type="button">
+                        ⚙️ Preferencias
+                    </button>
+                </nav>
+
+                <button type="button" id="btnLogout" class="btn-logout">
+                    🚪 Cerrar sesión
+                </button>
+            </aside>
+
+            <!-- ===================== CONTENIDO ===================== -->
+            <section class="perfil-content">
+
+                <!-- ---- TAB: MIS DATOS ---- -->
+                <div class="tab-panel active" id="tab-datos">
+
+                    <div class="tab-panel-header">
+                        <h2>Mis Datos</h2>
+                        <p>Esta información se usa para identificarte dentro de la plataforma.</p>
+                    </div>
+
+                    <form id="formDatos" novalidate>
+
+                        <div class="form-grid">
+
+                            <div class="form-group">
+                                <label for="inputNombre">Nombre</label>
+                                <input type="text" id="inputNombre" name="nombre" placeholder="Ej: Juan" required>
+                                <span class="error-msg" id="errNombre"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="inputApellido">Apellido</label>
+                                <input type="text" id="inputApellido" name="apellido" placeholder="Ej: Pérez" required>
+                                <span class="error-msg" id="errApellido"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="inputEmail">Correo electrónico</label>
+                                <input type="email" id="inputEmail" name="email" placeholder="correo@ejemplo.com" required>
+                                <span class="error-msg" id="errEmail"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="inputTelefono">Teléfono</label>
+                                <input type="tel" id="inputTelefono" name="telefono" placeholder="Ej: 3000000000">
+                                <span class="error-msg" id="errTelefono"></span>
+                            </div>
+
+                            <div class="form-group form-group-full">
+                                <label for="inputCiudad">Ciudad</label>
+                                <input type="text" id="inputCiudad" name="ciudad" placeholder="Ej: Bogotá D.C.">
+                            </div>
+
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-guardar">Guardar cambios</button>
+                            <button type="button" id="btnCancelarDatos" class="btn-cancelar">Cancelar</button>
+                        </div>
+
+                    </form>
+                </div>
+
+                <!-- ---- TAB: SEGURIDAD ---- -->
+                <div class="tab-panel" id="tab-seguridad">
+
+                    <div class="tab-panel-header">
+                        <h2>Seguridad</h2>
+                        <p>Actualiza tu contraseña periódicamente para mantener tu cuenta protegida.</p>
+                    </div>
+
+                    <form id="formSeguridad" novalidate>
+
+                        <div class="form-group">
+                            <label for="passActual">Contraseña actual</label>
+                            <div class="pass-wrapper">
+                                <input type="password" id="passActual" name="passActual" placeholder="••••••••" required>
+                                <button type="button" class="btn-ver-pass" data-target="passActual">👁</button>
+                            </div>
+                            <span class="error-msg" id="errPassActual"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="passNueva">Nueva contraseña</label>
+                            <div class="pass-wrapper">
+                                <input type="password" id="passNueva" name="passNueva" placeholder="Mínimo 8 caracteres" required>
+                                <button type="button" class="btn-ver-pass" data-target="passNueva">👁</button>
+                            </div>
+                            <div class="fuerza-pass">
+                                <div class="fuerza-barra" id="fuerzaBarra"></div>
+                            </div>
+                            <span class="fuerza-texto" id="fuerzaTexto"></span>
+                            <span class="error-msg" id="errPassNueva"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="passConfirmar">Confirmar nueva contraseña</label>
+                            <div class="pass-wrapper">
+                                <input type="password" id="passConfirmar" name="passConfirmar" placeholder="Repite la contraseña" required>
+                                <button type="button" class="btn-ver-pass" data-target="passConfirmar">👁</button>
+                            </div>
+                            <span class="error-msg" id="errPassConfirmar"></span>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-guardar">Actualizar contraseña</button>
+                            <button type="button" id="btnCancelarPass" class="btn-cancelar">Cancelar</button>
+                        </div>
+
+                    </form>
+
+                    <div class="zona-peligro">
+                        <h3>Zona de peligro</h3>
+                        <p>Eliminar tu cuenta borrará permanentemente tu información de la plataforma. Esta acción no se puede deshacer.</p>
+                        <button type="button" id="btnEliminarCuenta" class="btn-danger">Eliminar mi cuenta</button>
+                    </div>
+
+                    <!-- ---- PANEL ADMIN: LISTADO DE CUENTAS ---- -->
+                    <div class="panel-admin-cuentas" id="panelAdminCuentas" hidden>
+                        <h3>Cuentas de la plataforma</h3>
+                        <p>Gestiona el rol y el estado de los clientes y asesores registrados.</p>
+
+                        <div class="tabla-cuentas-wrap">
+                            <table class="tabla-cuentas">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Correo</th>
+                                        <th>Rol</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="listaCuentas">
+                                    <!-- Filas generadas por sesion.js -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ---- TAB: PREFERENCIAS ---- -->
+                <div class="tab-panel" id="tab-preferencias">
+
+                    <div class="tab-panel-header">
+                        <h2>Preferencias</h2>
+                        <p>Personaliza tu experiencia dentro de CE-Web Constructora.</p>
+                    </div>
+
+                    <div class="pref-item">
+                        <div class="pref-info">
+                            <strong>Tema oscuro</strong>
+                            <p>Activa el modo oscuro en toda la plataforma.</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="prefTheme">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="pref-item">
+                        <div class="pref-info">
+                            <strong>Notificaciones por correo</strong>
+                            <p>Recibe novedades sobre tus cotizaciones y alquileres.</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="prefNotif" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="pref-item">
+                        <div class="pref-info">
+                            <strong>Recordar sesión</strong>
+                            <p>Mantén tu sesión iniciada en este dispositivo.</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="prefRecordar" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                </div>
+
+            </section>
+
+        </div>
+
+    </main>
+
+    <footer>
+        <p>© 2026 CE Constructora | Todos los derechos reservados</p>
+    </footer>
+
+    <!-- ===================== TOAST ===================== -->
+    <div id="toast" class="toast"></div>
+
+    <!-- ===================== MODAL ELIMINAR CUENTA ===================== -->
+    <div id="modalConfirm" class="modal-overlay" hidden>
+        <div class="modal-box">
+            <h3>¿Eliminar tu cuenta?</h3>
+            <p>Esta acción es permanente y no se puede deshacer. Perderás el acceso a tus cotizaciones y datos guardados.</p>
+            <div class="modal-actions">
+                <button type="button" id="modalCancelar" class="btn-cancelar">Cancelar</button>
+                <button type="button" id="modalConfirmar" class="btn-danger">Sí, eliminar cuenta</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/ASSETS/JS/auth.js"></script>
+    <script src="/ASSETS/JS/sesion.js"></script>
+
+</body>
+</html>
