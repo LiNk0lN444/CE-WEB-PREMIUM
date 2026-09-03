@@ -1,5 +1,5 @@
 import React from 'react';
-import '../assests/css/catalogo.css';
+import '../assests/css/catalogo.css'; // O '../assests/CSS/catalogo.css' según el nombre exacto de tu carpeta
 
 export default function Catalogo() {
     return (

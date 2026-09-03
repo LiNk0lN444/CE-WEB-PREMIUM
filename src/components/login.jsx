@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ceObtenerSesion, ceIniciarSesion, ceRegistrar } from "../services/auth";
-import "../assets/login.css";
+import "../assets/css/login.css";
 
 export default function Login() {
     const navigate = useNavigate();

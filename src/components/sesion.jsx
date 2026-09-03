@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ceObtenerSesion, ceCerrarSesion, ceEsAdministrador, ceObtenerAvatar, ceAvatarKey } from "../services/auth";
-import "../assets/sesion.css";
+import "../assets/css/sesion.css";
 
 export default function Sesion() {
     const navigate = useNavigate();
