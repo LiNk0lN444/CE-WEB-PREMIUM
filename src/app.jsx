@@ -1,22 +1,22 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
-// Importa tus componentes (ajusta la ruta según dónde los hayas guardado)
+// Importa tus componentes de vistas
 import Catalogo from './components/catalogo';
 import Cotizaciones from './components/cotizaciones';
 import Inventario from './components/inventario';
 
-// Si tienes un componente para el Inicio, impórtalo también. Si no, puedes crear uno rápido.
+// Componente rápido para la página de inicio (puedes adaptarlo si ya tienes uno)
 function Home() {
     return (
-        <div style={{ textAlign: 'center', marginTop: '50px' }}>
-            <h1>Bienvenido a CE-Web Constructora</h1>
-            <p>Usa la barra de navegación o los enlaces para probar las vistas.</p>
-            <ul style={{ listStyle: 'none', padding: 0 }}>
-                <li><a href="/catalogo">Ir al Catálogo</a></li>
-                <li><a href="/cotizaciones">Ir a Cotizaciones</a></li>
-                <li><a href="/inventario">Ir al Inventario</a></li>
-            </ul>
+        <div style={{ padding: '40px', textAlign: 'center' }}>
+            <h1>CE-Web Constructora</h1>
+            <p>Bienvenido al sistema de gestión y alquiler de maquinaria.</p>
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
+                <a href="/catalogo" className="btn">Ver Catálogo</a>
+                <a href="/cotizaciones" className="btn">Ir a Cotizaciones</a>
+                <a href="/inventario" className="btn">Ir a Inventario</a>
+            </div>
         </div>
     );
 }

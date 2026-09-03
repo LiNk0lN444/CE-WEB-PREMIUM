@@ -4,11 +4,11 @@ from sqlalchemy.sql import func
 from config.database import Base
  
  
-class Role(Base):
+class Role  (Base):
     __tablename__ = "roles"
  
     id_rol = Column(Integer, primary_key=True)
-    nombre = Column(String(50), nullable=False)
+    cargo = Column(String(50), nullable=False)
     descripcion = Column(Text)
  
     usuarios = relationship("Usuario", back_populates="rol")
