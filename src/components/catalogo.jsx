@@ -19,7 +19,7 @@ const PRODUCTOS_DE_PRUEBA = [
     stock_quantity: 4,
     status: 'available',
     image_url: 'car966.png',
-    pdf_url: '/docs/CAT-966.pdf' // Ruta de ejemplo para el PDF
+    pdf_url: '/docs/CAT-966.pdf'
   },
   {
     product_id: 2,
@@ -95,15 +95,32 @@ export default function Catalogo({ darkMode }) {
     }
   }
 
-  // Resolver la ruta de la imagen local
+  // Resolver la ruta de la imagen local ignorando URLs de prueba del backend
   function obtenerRutaImagen(nombreImagen) {
     if (!nombreImagen) return null;
-    if (nombreImagen.startsWith('http')) return nombreImagen;
 
-    const nombreLimpio = nombreImagen.replace(/^\/?(IMG\/)?/, '');
-    const claveLocal = `../assests/IMG/${nombreLimpio}`;
+    let nombreArchivo = nombreImagen;
+    
+    // Si viene como URL completa
+    if (nombreImagen.startsWith('http')) {
+      // Si es una URL de prueba del tipo img.example.com, extraemos el nombre del archivo final
+      if (nombreImagen.includes('img.example.com')) {
+        const partes = nombreImagen.split('/');
+        nombreArchivo = partes[partes.length - 1];
+      } else {
+        // Si es una URL externa real y válida, la devolvemos tal cual
+        return nombreImagen;
+      }
+    }
 
-    return imagenesLocales[claveLocal] || null;
+    const nombreLimpio = nombreArchivo.replace(/^\/?(IMG\/)?/, '');
+    
+    // Buscar coincidencia insensible a mayúsculas/minúsculas en las imágenes locales
+    const claveEncontrada = Object.keys(imagenesLocales).find((key) =>
+      key.toLowerCase().endsWith(`/${nombreLimpio.toLowerCase()}`)
+    );
+
+    return claveEncontrada ? imagenesLocales[claveEncontrada] : null;
   }
 
   // AGREGAR AL CARRITO DE COTIZACIÓN
