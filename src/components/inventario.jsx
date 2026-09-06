@@ -3,7 +3,8 @@ import {
   obtenerInventario,
   obtenerProductos,
   eliminarItemInventario,
-  actualizarItemInventario
+  actualizarItemInventario,
+  crearItemInventario
 } from '../services/api';
 
 import '../assests/css/inventario.css';
@@ -15,11 +16,15 @@ export default function Inventario({ darkMode }) {
   const [error, setError] = useState('');
 
   // ==========================================
-  // ESTADOS DEL MODAL DE EDICIÓN
+  // ESTADO DE BÚSQUEDA
   // ==========================================
+  const [busqueda, setBusqueda] = useState('');
 
+  // ==========================================
+  // ESTADOS DE LOS MODALES
+  // ==========================================
   const [modalEditar, setModalEditar] = useState(false);
-
+  const [modalAgregar, setModalAgregar] = useState(false);
   const [registroEditando, setRegistroEditando] = useState(null);
 
   const [formulario, setFormulario] = useState({
@@ -30,11 +35,9 @@ export default function Inventario({ darkMode }) {
 
   const [guardando, setGuardando] = useState(false);
 
-
   // ==========================================
   // CARGAR INVENTARIO Y PRODUCTOS
   // ==========================================
-
   useEffect(() => {
     cargarDatos();
   }, []);
@@ -51,106 +54,128 @@ export default function Inventario({ darkMode }) {
 
       setInventario(datosInventario);
       setProductos(datosProductos);
-
     } catch (error) {
       console.error('Error cargando inventario:', error);
-
-      setError(
-        'No fue posible cargar la información del inventario.'
-      );
-
+      setError('No fue posible cargar la información del inventario.');
     } finally {
       setCargando(false);
     }
   }
 
-
   // ==========================================
   // BUSCAR PRODUCTO POR ID
   // ==========================================
-
   function buscarProducto(productId) {
-    return productos.find(
-      (producto) => producto.product_id === productId
-    );
+    return productos.find((producto) => producto.product_id === productId);
   }
 
+  // ==========================================
+  // FILTRADO LOCAL (BÚSQUEDA)
+  // ==========================================
+  const inventarioFiltrado = inventario.filter((item) => {
+    const producto = buscarProducto(item.product_id);
+    const termino = busqueda.toLowerCase();
+
+    const nombre = producto?.name?.toLowerCase() || '';
+    const tipo = producto?.type?.toLowerCase() || '';
+    const id = String(item.inventory_id);
+
+    return nombre.includes(termino) || tipo.includes(termino) || id.includes(termino);
+  });
+
+  // ==========================================
+  // ABRIR MODAL AGREGAR
+  // ==========================================
+  function abrirModalAgregar() {
+    setFormulario({
+      product_id: '',
+      quantity: '',
+      initial_price: ''
+    });
+    setModalAgregar(true);
+  }
+
+  // ==========================================
+  // CREAR NUEVO REGISTRO
+  // ==========================================
+  async function manejarCrearRegistro(event) {
+    event.preventDefault();
+
+    try {
+      setGuardando(true);
+
+      const nuevoRegistro = {
+        product_id: Number(formulario.product_id),
+        quantity: Number(formulario.quantity),
+        initial_price: Number(formulario.initial_price)
+      };
+
+      const respuesta = await crearItemInventario(nuevoRegistro);
+
+      setInventario((actual) => [...actual, respuesta]);
+      setModalAgregar(false);
+      alert('Registro agregado correctamente.');
+    } catch (error) {
+      console.error('Error agregando registro:', error);
+      alert(`No fue posible agregar el registro: ${error.message}`);
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   // ==========================================
   // ELIMINAR REGISTRO
   // ==========================================
-
   async function manejarEliminar(inventoryId, nombreProducto) {
     const confirmar = window.confirm(
       `¿Estás segura de que deseas eliminar "${nombreProducto}" del inventario?`
     );
 
-    if (!confirmar) {
-      return;
-    }
+    if (!confirmar) return;
 
     try {
       await eliminarItemInventario(inventoryId);
-
       setInventario((inventarioActual) =>
-        inventarioActual.filter(
-          (item) => item.inventory_id !== inventoryId
-        )
+        inventarioActual.filter((item) => item.inventory_id !== inventoryId)
       );
-
       alert('Registro eliminado correctamente.');
-
     } catch (error) {
       console.error('Error eliminando registro:', error);
-
-      alert(
-        `No fue posible eliminar el registro: ${error.message}`
-      );
+      alert(`No fue posible eliminar el registro: ${error.message}`);
     }
   }
-
 
   // ==========================================
   // ABRIR MODAL DE EDICIÓN
   // ==========================================
-
   function manejarEditar(item) {
     setRegistroEditando(item);
-
     setFormulario({
       product_id: item.product_id,
       quantity: item.quantity,
       initial_price: item.initial_price
     });
-
     setModalEditar(true);
   }
-
 
   // ==========================================
   // CAMBIAR VALORES DEL FORMULARIO
   // ==========================================
-
   function manejarCambio(event) {
     const { name, value } = event.target;
-
     setFormulario((datosActuales) => ({
       ...datosActuales,
       [name]: value
     }));
   }
 
-
   // ==========================================
-  // GUARDAR CAMBIOS
+  // GUARDAR CAMBIOS DE EDICIÓN
   // ==========================================
-
   async function manejarGuardarCambios(event) {
     event.preventDefault();
 
-    if (!registroEditando) {
-      return;
-    }
+    if (!registroEditando) return;
 
     try {
       setGuardando(true);
@@ -168,107 +193,79 @@ export default function Inventario({ darkMode }) {
 
       setInventario((inventarioActual) =>
         inventarioActual.map((item) =>
-          item.inventory_id === respuesta.inventory_id
-            ? respuesta
-            : item
+          item.inventory_id === respuesta.inventory_id ? respuesta : item
         )
       );
 
       setModalEditar(false);
       setRegistroEditando(null);
-
       alert('Registro actualizado correctamente.');
-
     } catch (error) {
       console.error('Error actualizando registro:', error);
-
-      alert(
-        `No fue posible actualizar el registro: ${error.message}`
-      );
-
+      alert(`No fue posible actualizar el registro: ${error.message}`);
     } finally {
       setGuardando(false);
     }
   }
 
-
   // ==========================================
-  // CERRAR MODAL
+  // CERRAR MODALES
   // ==========================================
-
-  function cerrarModal() {
-    if (guardando) {
-      return;
-    }
-
+  function cerrarModales() {
+    if (guardando) return;
     setModalEditar(false);
+    setModalAgregar(false);
     setRegistroEditando(null);
   }
 
-
-  // ==========================================
-  // INTERFAZ
-  // ==========================================
-
   return (
-    <div
-      className={`inventario-container ${
-        darkMode ? 'theme-dark' : 'theme-light'
-      }`}
-    >
-
+    <div className={`inventario-container ${darkMode ? 'theme-dark' : 'theme-light'}`}>
+      
       {/* ENCABEZADO */}
-
       <div className="inventario-encabezado">
         <div>
           <h2>Gestión de Inventario</h2>
-
-          <p>
-            Administra y controla los productos registrados en el sistema.
-          </p>
+          <p>Administra y controla los productos registrados en el sistema.</p>
         </div>
 
         <button
           type="button"
           className="btn-agregar"
+          onClick={abrirModalAgregar}
         >
           + Agregar registro
         </button>
       </div>
 
+      {/* BARRA DE BÚSQUEDA */}
+      <div className="inventario-barras">
+        <div className="campo-busqueda">
+          <input
+            type="text"
+            placeholder="🔍 Buscar por ID, producto o tipo..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+      </div>
 
       {/* CARGANDO */}
-
-      {cargando && (
-        <div className="inventario-mensaje">
-          Cargando información...
-        </div>
-      )}
-
+      {cargando && <div className="inventario-mensaje">Cargando información...</div>}
 
       {/* ERROR */}
-
       {error && (
         <div className="inventario-error">
           <p>{error}</p>
-
-          <button
-            type="button"
-            onClick={cargarDatos}
-          >
+          <button type="button" onClick={cargarDatos}>
             Intentar nuevamente
           </button>
         </div>
       )}
 
-
       {/* TABLA */}
-
       {!cargando && !error && (
         <div className="tabla-responsive">
-
           <table className="tabla-inventario">
-
             <thead>
               <tr>
                 <th>ID</th>
@@ -283,55 +280,30 @@ export default function Inventario({ darkMode }) {
             </thead>
 
             <tbody>
-
-              {inventario.length > 0 ? (
-
-                inventario.map((item) => {
-
-                  const producto = buscarProducto(
-                    item.product_id
-                  );
+              {inventarioFiltrado.length > 0 ? (
+                inventarioFiltrado.map((item) => {
+                  const producto = buscarProducto(item.product_id);
 
                   return (
-
                     <tr key={item.inventory_id}>
-
-                      <td className="col-id">
-                        #{item.inventory_id}
-                      </td>
-
+                      <td className="col-id">#{item.inventory_id}</td>
                       <td className="producto-nombre">
-                        {producto
-                          ? producto.name
-                          : `Producto ${item.product_id}`}
+                        {producto ? producto.name : `Producto ${item.product_id}`}
                       </td>
-
                       <td>
                         <span className="tipo-badge">
-                          {producto
-                            ? producto.type
-                            : 'Sin información'}
+                          {producto ? producto.type : 'Sin información'}
                         </span>
                       </td>
-
                       <td className="descripcion">
-                        {producto?.description ||
-                          'Sin descripción disponible'}
+                        {producto?.description || 'Sin descripción disponible'}
                       </td>
-
                       <td>
-                        <span className="cantidad-badge">
-                          {item.quantity}
-                        </span>
+                        <span className="cantidad-badge">{item.quantity}</span>
                       </td>
-
                       <td className="precio">
-                        $
-                        {Number(
-                          item.initial_price
-                        ).toLocaleString('es-CO')}
+                        ${Number(item.initial_price).toLocaleString('es-CO')}
                       </td>
-
                       <td>
                         <span
                           className={`estado ${
@@ -343,12 +315,8 @@ export default function Inventario({ darkMode }) {
                           {producto?.status || 'Desconocido'}
                         </span>
                       </td>
-
                       <td>
                         <div className="acciones">
-
-                          {/* EDITAR */}
-
                           <button
                             type="button"
                             className="btn-editar"
@@ -357,10 +325,6 @@ export default function Inventario({ darkMode }) {
                           >
                             ✏️
                           </button>
-
-
-                          {/* ELIMINAR */}
-
                           <button
                             type="button"
                             className="btn-eliminar"
@@ -368,92 +332,60 @@ export default function Inventario({ darkMode }) {
                             onClick={() =>
                               manejarEliminar(
                                 item.inventory_id,
-                                producto?.name ||
-                                  `Producto ${item.product_id}`
+                                producto?.name || `Producto ${item.product_id}`
                               )
                             }
                           >
                             🗑️
                           </button>
-
                         </div>
                       </td>
-
                     </tr>
-
                   );
                 })
-
               ) : (
-
                 <tr>
-                  <td
-                    colSpan="8"
-                    className="sin-inventario"
-                  >
-                    No hay registros en el inventario.
+                  <td colSpan="8" className="sin-inventario">
+                    {busqueda ? 'No se encontraron coincidencias.' : 'No hay registros en el inventario.'}
                   </td>
                 </tr>
-
               )}
-
             </tbody>
-
           </table>
-
         </div>
       )}
 
-
       {/* =====================================
-          MODAL EDITAR
+          MODAL CREAR / EDITAR
       ====================================== */}
-
-      {modalEditar && (
-        <div
-          className="modal-overlay"
-          onClick={cerrarModal}
-        >
-
-          <div
-            className="modal-editar"
-            onClick={(event) => event.stopPropagation()}
-          >
-
+      {(modalEditar || modalAgregar) && (
+        <div className="modal-overlay" onClick={cerrarModales}>
+          <div className="modal-editar" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
-
               <div>
-                <h3>Editar registro</h3>
-
+                <h3>{modalAgregar ? 'Agregar registro' : 'Editar registro'}</h3>
                 <p>
-                  Actualiza la información del inventario.
+                  {modalAgregar
+                    ? 'Ingresa la información para registrar en el inventario.'
+                    : 'Actualiza la información del inventario.'}
                 </p>
               </div>
 
               <button
                 type="button"
                 className="btn-cerrar-modal"
-                onClick={cerrarModal}
+                onClick={cerrarModales}
               >
                 ×
               </button>
-
             </div>
-
 
             <form
               className="formulario-editar"
-              onSubmit={manejarGuardarCambios}
+              onSubmit={modalAgregar ? manejarCrearRegistro : manejarGuardarCambios}
             >
-
-              {/* PRODUCTO */}
-
               <div className="campo-formulario">
-
-                <label htmlFor="product_id">
-                  Producto
-                </label>
-
+                <label htmlFor="product_id">Producto</label>
                 <select
                   id="product_id"
                   name="product_id"
@@ -461,35 +393,17 @@ export default function Inventario({ darkMode }) {
                   onChange={manejarCambio}
                   required
                 >
-
-                  <option value="">
-                    Selecciona un producto
-                  </option>
-
+                  <option value="">Selecciona un producto</option>
                   {productos.map((producto) => (
-
-                    <option
-                      key={producto.product_id}
-                      value={producto.product_id}
-                    >
+                    <option key={producto.product_id} value={producto.product_id}>
                       {producto.name}
                     </option>
-
                   ))}
-
                 </select>
-
               </div>
 
-
-              {/* CANTIDAD */}
-
               <div className="campo-formulario">
-
-                <label htmlFor="quantity">
-                  Cantidad
-                </label>
-
+                <label htmlFor="quantity">Cantidad</label>
                 <input
                   type="number"
                   id="quantity"
@@ -499,18 +413,10 @@ export default function Inventario({ darkMode }) {
                   onChange={manejarCambio}
                   required
                 />
-
               </div>
 
-
-              {/* PRECIO */}
-
               <div className="campo-formulario">
-
-                <label htmlFor="initial_price">
-                  Precio inicial
-                </label>
-
+                <label htmlFor="initial_price">Precio inicial</label>
                 <input
                   type="number"
                   id="initial_price"
@@ -521,42 +427,25 @@ export default function Inventario({ darkMode }) {
                   onChange={manejarCambio}
                   required
                 />
-
               </div>
 
-
-              {/* BOTONES */}
-
               <div className="modal-acciones">
-
                 <button
                   type="button"
                   className="btn-cancelar"
-                  onClick={cerrarModal}
+                  onClick={cerrarModales}
                   disabled={guardando}
                 >
                   Cancelar
                 </button>
-
-                <button
-                  type="submit"
-                  className="btn-guardar"
-                  disabled={guardando}
-                >
-                  {guardando
-                    ? 'Guardando...'
-                    : 'Guardar cambios'}
+                <button type="submit" className="btn-guardar" disabled={guardando}>
+                  {guardando ? 'Guardando...' : modalAgregar ? 'Agregar' : 'Guardar cambios'}
                 </button>
-
               </div>
-
             </form>
-
           </div>
-
         </div>
       )}
-
     </div>
   );
 }

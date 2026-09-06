@@ -3,10 +3,17 @@ import './assests/css/index.css';
 import Catalogo from './components/catalogo';
 import Cotizaciones from './components/cotizaciones';
 import Inventario from './components/inventario';
+import { Login } from './components/login';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [vistaActual, setVistaActual] = useState('inicio');
+
+  // Estado global de la sesión del usuario
+  const [usuarioSesion, setUsuarioSesion] = useState(() => {
+    const sesionGuardada = localStorage.getItem('usuario_sesion');
+    return sesionGuardada ? JSON.parse(sesionGuardada) : null;
+  });
 
   const toggleTheme = () => setDarkMode(!darkMode);
 
@@ -14,6 +21,20 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [vistaActual]);
+
+  const handleLoginSuccess = (usuario) => {
+    setUsuarioSesion(usuario);
+    localStorage.setItem('usuario_sesion', JSON.stringify(usuario));
+    alert(`¡Bienvenido de nuevo, ${usuario.username || usuario.nombre || 'Usuario'}!`);
+    setVistaActual('inicio');
+  };
+
+  const handleCerrarSesion = () => {
+    setUsuarioSesion(null);
+    localStorage.removeItem('usuario_sesion');
+    alert('Sesión cerrada correctamente.');
+    setVistaActual('inicio');
+  };
 
   return (
     <div className={`app-root ${darkMode ? 'theme-dark' : 'theme-light'}`}>
@@ -56,6 +77,27 @@ export default function App() {
                 Cotizaciones
               </button>
             </li>
+
+            {/* CONTROL DE AUTENTICACIÓN EN NAVBAR */}
+            <li>
+              {usuarioSesion ? (
+                <button 
+                  className="btn-hero-secondary"
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                  onClick={handleCerrarSesion}
+                >
+                  👤 {usuarioSesion.username || 'Usuario'} (Salir)
+                </button>
+              ) : (
+                <button 
+                  className={vistaActual === 'login' ? 'active' : ''}
+                  onClick={() => setVistaActual('login')}
+                >
+                  🔑 Iniciar Sesión
+                </button>
+              )}
+            </li>
+
             <li>
               <button className="btn-theme-toggle" onClick={toggleTheme}>
                 {darkMode ? '☀️ Modo Claro' : '🌙 Modo Oscuro'}
@@ -66,7 +108,7 @@ export default function App() {
       </header>
 
       <main className="main-content-container">
-        {/* VISTA 1: INICIO (HERO + MÓDULOS) */}
+        {/* VISTA 1: INICIO */}
         {vistaActual === 'inicio' && (
           <div className="landing-modern">
             <section className="hero-fixed-background">
@@ -76,7 +118,11 @@ export default function App() {
                 <div className="hero-text-side">
                   <div className="welcome-badge">
                     <span className="bot-avatar">🤖</span>
-                    <span className="welcome-text">¡Hola, bienvenido a CE-Web!</span>
+                    <span className="welcome-text">
+                      {usuarioSesion 
+                        ? `¡Hola de nuevo, ${usuarioSesion.username || 'Usuario'}!` 
+                        : '¡Hola, bienvenido a CE-Web!'}
+                    </span>
                     <span className="waving-hand">👋</span>
                   </div>
 
@@ -129,7 +175,9 @@ export default function App() {
                 </div>
 
                 <div className="feature-card" onClick={() => setVistaActual('cotizaciones')}>
-                  <div className="card-badge auth">Requiere Login</div>
+                  <div className="card-badge auth">
+                    {usuarioSesion ? 'Sesión Activa' : 'Requiere Login'}
+                  </div>
                   <div className="card-icon">🧾</div>
                   <h3>Cotizador Digital</h3>
                   <p>Calcula presupuestos para proyectos por días o meses de forma automática.</p>
@@ -148,7 +196,15 @@ export default function App() {
           </div>
         )}
 
-        {/* VISTAS INDEPENDIENTES (CARGAN DIRECTO ARRIBA) */}
+        {/* VISTA LOGIN / REGISTRO */}
+        {vistaActual === 'login' && (
+          <Login 
+            onLoginSuccess={handleLoginSuccess}
+            onCancel={() => setVistaActual('inicio')}
+          />
+        )}
+
+        {/* VISTAS INDEPENDIENTES */}
         {vistaActual === 'catalogo' && (
           <div className="view-wrapper">
             <div className="page-header-banner">
@@ -165,7 +221,10 @@ export default function App() {
               <h2>Cotizador Digital</h2>
               <p>Genera tu presupuesto personalizado según la duración de tu obra</p>
             </div>
-            <Cotizaciones darkMode={darkMode} />
+            <Cotizaciones 
+              darkMode={darkMode} 
+              onNavigateLogin={() => setVistaActual('login')} 
+            />
           </div>
         )}
 

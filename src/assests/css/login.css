@@ -4,10 +4,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-image: url('/IMG/n.png');
+  /* Se utiliza url() apuntando a public/ para evitar errores de compilación */
+  background-image: url('/public/IMG/in.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
+  background-color: #1a1a2e; /* Color de respaldo si la imagen falla */
   padding: 1rem;
 }
 
@@ -17,7 +19,7 @@
   max-width: 28rem;
   padding: 2rem;
   border-radius: 1rem;
-  background-color: rgba(0, 0, 0, 0.45);
+  background-color: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.2);

@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
+import '../assests/css/login.css'; // Ajusta la ruta a tu archivo CSS si difiere
 
-export const Login = ({ onLoginSuccess }) => {
+export const Login = ({ onLoginSuccess, onCancel }) => {
+  const [esRegistro, setEsRegistro] = useState(false);
+
+  // Estados del Formulario
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
@@ -10,91 +17,200 @@ export const Login = ({ onLoginSuccess }) => {
     e.preventDefault();
     setError('');
 
-    // Validación básica
-    if (!email || !password) {
-      setError('Por favor, completa todos los campos.');
-      return;
-    }
+    if (esRegistro) {
+      // Validaciones de Registro
+      if (!username || !email || !password) {
+        setError('Por favor, completa todos los campos obligatorios.');
+        return;
+      }
 
-    // Aquí conectas con tu servicio de autenticación o localStorage
-    const usuarioSimulado = {
-      nombre: 'Usuario',
-      email: email,
-      rol: 'Cliente'
-    };
+      // Obtener usuarios locales para simular persistencia
+      const usuariosExistentes = JSON.parse(localStorage.getItem('bd_users')) || [];
+      const yaExiste = usuariosExistentes.some((u) => u.email === email);
 
-    if (onLoginSuccess) {
-      onLoginSuccess(usuarioSimulado);
+      if (yaExiste) {
+        setError('El correo electrónico ya está registrado.');
+        return;
+      }
+
+      const nuevoUsuario = {
+        user_id: Date.now(),
+        username,
+        email,
+        password, // En producción el backend encripta esto
+        phone_number: phoneNumber,
+        status: 'active',
+        rol: 'Cliente'
+      };
+
+      usuariosExistentes.push(nuevoUsuario);
+      localStorage.setItem('bd_users', JSON.stringify(usuariosExistentes));
+
+      alert('¡Cuenta creada con éxito! Ahora puedes iniciar sesión.');
+      setEsRegistro(false);
+      setPassword('');
+    } else {
+      // Validaciones de Login
+      if (!email || !password) {
+        setError('Por favor, ingresa tu correo y contraseña.');
+        return;
+      }
+
+      const usuariosExistentes = JSON.parse(localStorage.getItem('bd_users')) || [];
+      const usuarioValido = usuariosExistentes.find(
+        (u) => u.email === email && u.password === password
+      );
+
+      // Credenciales de prueba si la lista está vacía
+      if (usuarioValido || (email === 'admin@ceweb.com' && password === '123456')) {
+        const usuarioSesion = usuarioValido || {
+          user_id: 1,
+          username: 'Administrador CE-Web',
+          email: email,
+          phone_number: '3000000000',
+          rol: 'Admin'
+        };
+
+        if (onLoginSuccess) {
+          onLoginSuccess(usuarioSesion);
+        }
+      } else {
+        setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
+      }
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-fixed px-4" style={{ backgroundImage: "url('/IMG/n.png')" }}>
-      
-      {/* Tarjeta de Login con estilo Glassmorphism */}
-      <div className="w-full max-w-md p-8 rounded-2xl backdrop-blur-md bg-black/45 border border-white/20 shadow-2xl text-white">
+    <div className="login-container">
+      <div className="login-card">
         
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-red-500 mb-2">Iniciar Sesión</h2>
-          <p className="text-sm text-gray-200">Ingresa tus credenciales para acceder a tu cuenta</p>
+        <div className="login-header">
+          <h2 className="login-title">
+            {esRegistro ? 'Crear Cuenta' : 'Iniciar Sesión'}
+          </h2>
+          <p className="login-subtitle">
+            {esRegistro
+              ? 'Ingresa tus datos para registrarte en CE-Web'
+              : 'Ingresa tus credenciales para acceder a la plataforma'}
+          </p>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-200 text-sm text-center">
-            {error}
-          </div>
-        )}
+        {error && <div className="login-error">{error}</div>}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="login-form">
+          {/* Campo Nombre de Usuario (Solo en Registro) */}
+          {esRegistro && (
+            <div className="form-group">
+              <label className="form-label">Nombre Completo / Usuario *</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Ej. Juan Pérez"
+                className="form-input"
+              />
+            </div>
+          )}
+
           {/* Campo Correo */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Correo Electrónico</label>
+          <div className="form-group">
+            <label className="form-label">Correo Electrónico *</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="ejemplo@correo.com"
-              className="w-full px-4 py-3 rounded-xl bg-white/90 text-gray-900 border-2 border-transparent focus:border-red-500 focus:bg-white outline-none transition-all duration-200"
+              className="form-input"
             />
           </div>
 
+          {/* Campo Teléfono (Solo en Registro) */}
+          {esRegistro && (
+            <div className="form-group">
+              <label className="form-label">Teléfono (Opcional)</label>
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="300 123 4567"
+                className="form-input"
+              />
+            </div>
+          )}
+
           {/* Campo Contraseña */}
-          <div>
-            <label className="block text-sm font-semibold mb-1">Contraseña</label>
-            <div className="relative flex items-center">
+          <div className="form-group">
+            <label className="form-label">Contraseña *</label>
+            <div className="input-wrapper">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 pr-12 rounded-xl bg-white/90 text-gray-900 border-2 border-transparent focus:border-red-500 focus:bg-white outline-none transition-all duration-200"
+                className="form-input form-input-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 text-gray-600 hover:text-gray-900 text-lg focus:outline-none"
+                className="toggle-password-btn"
               >
                 {showPassword ? '🙈' : '👁️'}
               </button>
             </div>
           </div>
 
-          {/* Acciones */}
-          <button
-            type="submit"
-            className="w-full py-3 bg-red-500 hover:bg-white hover:text-red-500 font-bold text-white rounded-xl transition-all duration-300 shadow-md"
-          >
-            Ingresar
+          {/* Botón Principal */}
+          <button type="submit" className="submit-btn">
+            {esRegistro ? 'Registrarse' : 'Ingresar'}
           </button>
+
+          {onCancel && (
+            <button
+              type="button"
+              className="cot-btn-secundario"
+              onClick={onCancel}
+              style={{ marginTop: '0.5rem', width: '100%' }}
+            >
+              Volver al Inicio
+            </button>
+          )}
         </form>
 
-        {/* Pie de Registro */}
-        <div className="mt-6 text-center text-sm text-gray-300">
-          ¿No tienes una cuenta?{' '}
-          <a href="#registro" className="text-red-400 font-semibold hover:underline">
-            Regístrate aquí
-          </a>
+        {/* Pie de Alternancia Login/Registro */}
+        <div className="login-footer">
+          {esRegistro ? (
+            <>
+              ¿Ya tienes una cuenta?{' '}
+              <button
+                type="button"
+                className="register-link"
+                onClick={() => {
+                  setEsRegistro(false);
+                  setError('');
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                Inicia sesión aquí
+              </button>
+            </>
+          ) : (
+            <>
+              ¿No tienes una cuenta?{' '}
+              <button
+                type="button"
+                className="register-link"
+                onClick={() => {
+                  setEsRegistro(true);
+                  setError('');
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                Regístrate aquí
+              </button>
+            </>
+          )}
         </div>
+
       </div>
     </div>
   );
