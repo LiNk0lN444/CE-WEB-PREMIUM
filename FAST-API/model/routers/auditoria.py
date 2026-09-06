@@ -2,51 +2,107 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from ..models import Auditoria
-from schema.schemas import AuditoriaCreate, AuditoriaResponse
-
-router = APIRouter(prefix="/auditoria", tags=["Auditoria"])
+from ..models import Audit
+from schema.schemas import AuditCreate, AuditResponse
 
 
-@router.post("/", response_model=AuditoriaResponse)
-def crear_auditoria(data: AuditoriaCreate, db: Session = Depends(get_db)):
-    nuevo = Auditoria(**data.dict())
-    db.add(nuevo)
+router = APIRouter(
+    prefix="/audit",
+    tags=["Audit"]
+)
+
+
+@router.post("/", response_model=AuditResponse)
+def crear_auditoria(
+    data: AuditCreate,
+    db: Session = Depends(get_db)
+):
+    nueva = Audit(
+        user_id=data.user_id,
+        table_name=data.table_name,
+        record_id=data.record_id,
+        action=data.action,
+        description=data.description
+    )
+
+    db.add(nueva)
     db.commit()
-    db.refresh(nuevo)
-    return nuevo
+    db.refresh(nueva)
+
+    return nueva
 
 
-@router.get("/", response_model=list[AuditoriaResponse])
-def listar_auditorias(db: Session = Depends(get_db)):
-    return db.query(Auditoria).all()
+@router.get("/", response_model=list[AuditResponse])
+def listar_auditoria(
+    db: Session = Depends(get_db)
+):
+    return db.query(Audit).all()
 
 
-@router.get("/{id}", response_model=AuditoriaResponse)
-def obtener_auditoria(id: int, db: Session = Depends(get_db)):
-    item = db.query(Auditoria).filter(Auditoria.id_auditoria == id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Auditoria no encontrado")
-    return item
+@router.get("/{audit_id}", response_model=AuditResponse)
+def obtener_auditoria(
+    audit_id: int,
+    db: Session = Depends(get_db)
+):
+    auditoria = db.query(Audit).filter(
+        Audit.audit_id == audit_id
+    ).first()
+
+    if not auditoria:
+        raise HTTPException(
+            status_code=404,
+            detail="Registro de auditoría no encontrado"
+        )
+
+    return auditoria
 
 
-@router.put("/{id}", response_model=AuditoriaResponse)
-def actualizar_auditoria(id: int, data: AuditoriaCreate, db: Session = Depends(get_db)):
-    item = db.query(Auditoria).filter(Auditoria.id_auditoria == id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Auditoria no encontrado")
-    for campo, valor in data.dict().items():
-        setattr(item, campo, valor)
+@router.put("/{audit_id}", response_model=AuditResponse)
+def actualizar_auditoria(
+    audit_id: int,
+    data: AuditCreate,
+    db: Session = Depends(get_db)
+):
+    auditoria = db.query(Audit).filter(
+        Audit.audit_id == audit_id
+    ).first()
+
+    if not auditoria:
+        raise HTTPException(
+            status_code=404,
+            detail="Registro de auditoría no encontrado"
+        )
+
+    auditoria.user_id = data.user_id
+    auditoria.table_name = data.table_name
+    auditoria.record_id = data.record_id
+    auditoria.action = data.action
+    auditoria.description = data.description
+
     db.commit()
-    db.refresh(item)
-    return item
+    db.refresh(auditoria)
+
+    return auditoria
 
 
-@router.delete("/{id}")
-def eliminar_auditoria(id: int, db: Session = Depends(get_db)):
-    item = db.query(Auditoria).filter(Auditoria.id_auditoria == id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Auditoria no encontrado")
-    db.delete(item)
+@router.delete("/{audit_id}")
+def eliminar_auditoria(
+    audit_id: int,
+    db: Session = Depends(get_db)
+):
+    auditoria = db.query(Audit).filter(
+        Audit.audit_id == audit_id
+    ).first()
+
+    if not auditoria:
+        raise HTTPException(
+            status_code=404,
+            detail="Registro de auditoría no encontrado"
+        )
+
+    db.delete(auditoria)
     db.commit()
-    return {"mensaje": "Auditoria eliminado correctamente"}
+
+    return {
+        "mensaje": "Registro de auditoría eliminado correctamente"
+    }

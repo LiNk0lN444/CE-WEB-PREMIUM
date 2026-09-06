@@ -1,295 +1,184 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional
 from datetime import datetime
 
-# ==========================================
-# 1. ROLES
-# ==========================================
-
-class RoleCreate(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
-
-
-class RoleResponse(BaseModel):
-    id_rol: int
-    nombre: str
-    descripcion: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
 
 # ==========================================
-# 2. USUARIOS
+# 1. USERS
 # ==========================================
 
-class UsuarioCreate(BaseModel):
-    nombre: str
-    apellido: str
+class UserCreate(BaseModel):
+    username: str
     email: EmailStr
-    contrasena: str
-    telefono: Optional[str] = None
-    id_rol: int
+    password: str
+    phone_number: Optional[str] = None
+    status: Optional[str] = "active"
 
 
-class UsuarioResponse(BaseModel):
-    id_usuario: int
-    nombre: str
-    apellido: str
+class UserResponse(BaseModel):
+    user_id: int
+    username: str
     email: EmailStr
-    telefono: Optional[str] = None
-    estado: str
-    id_rol: int
-    fecha_registro: datetime
+    phone_number: Optional[str] = None
+    status: Optional[str] = None
+    date_registered: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
-
-# ==========================================
-# 3. CLIENTES
-# ==========================================
-
-class ClienteCreate(BaseModel):
-    nombre: str
-    apellido: str
-    documento: str
-    empresa: Optional[str] = None
-    telefono: Optional[str] = None
-    correo: EmailStr
-    direccion: Optional[str] = None
-    ciudad: Optional[str] = None
-
-
-class ClienteResponse(BaseModel):
-    id_cliente: int
-    nombre: str
-    apellido: str
-    documento: str
-    empresa: Optional[str] = None
-    telefono: Optional[str] = None
-    correo: EmailStr
-    direccion: Optional[str] = None
-    ciudad: Optional[str] = None
-    fecha_registro: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==========================================
-# 4. MAQUINARIA
+# 2. PRODUCTS
 # ==========================================
 
-class MaquinariaCreate(BaseModel):
-    codigo: str
-    nombre: str
-    marca: Optional[str] = None
-    maquina_disponible: Optional[bool] = True
-    modelo: Optional[str] = None
-    descripcion: Optional[str] = None
-    precio_dia: float
-    estado: Optional[str] = "disponible"
-    imagen: Optional[str] = None
+class ProductCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    stock_quantity: int
+    type: str
+    status: Optional[str] = "available"
+    image_url: Optional[str] = None
+    model_number: Optional[str] = None
 
 
-class MaquinariaResponse(BaseModel):
-    id_maquinaria: int
-    codigo: str
-    nombre: str
-    marca: Optional[str] = None
-    maquina_disponible: bool
-    modelo: Optional[str] = None
-    descripcion: Optional[str] = None
-    precio_dia: float
-    estado: str
-    imagen: Optional[str] = None
+class ProductResponse(BaseModel):
+    product_id: int
+    name: str
+    description: Optional[str] = None
+    stock_quantity: int
+    type: str
+    status: Optional[str] = None
+    image_url: Optional[str] = None
+    model_number: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==========================================
-# 5. CATEGORÍAS
+# 3. INVENTORY
 # ==========================================
 
-class CategoriaCreate(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
+class InventoryCreate(BaseModel):
+    product_id: int
+    quantity: int
+    initial_price: float
 
 
-class CategoriaResponse(BaseModel):
-    id_categoria: int
-    nombre: str
-    descripcion: Optional[str] = None
+class InventoryResponse(BaseModel):
+    inventory_id: int
+    product_id: int
+    quantity: int
+    date_added: Optional[datetime] = None
+    initial_price: float
 
-    class Config:
-        from_attributes = True
-
-
-# ==========================================
-# 6. HERRAMIENTAS
-# ==========================================
-
-class HerramientaCreate(BaseModel):
-    codigo: str
-    nombre: str
-    descripcion: Optional[str] = None
-    cantidad_disponible: int = 0
-    precio: float
-    imagen: Optional[str] = None
-    id_categoria: Optional[int] = None
-
-
-class HerramientaResponse(BaseModel):
-    id_herramienta: int
-    codigo: str
-    nombre: str
-    descripcion: Optional[str] = None
-    cantidad_disponible: int
-    precio: float
-    imagen: Optional[str] = None
-    id_categoria: Optional[int] = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==========================================
-# 7. DETALLE COTIZACIÓN
+# 4. INVENTORY MOVEMENT
 # ==========================================
 
-class DetalleCotizacionCreate(BaseModel):
-    id_maquinaria: Optional[int] = None
-    id_herramienta: Optional[int] = None
-    cantidad: int = 1
-    dias_alquiler: int = 1
-    valor_unitario: float
-    subtotal: float
+class InventoryMovementCreate(BaseModel):
+    product_id: int
+    quantity: int
+    movement_type: str
+    price: float
 
 
-class DetalleCotizacionResponse(BaseModel):
-    id_detalle: int
-    id_cotizacion: int
-    id_maquinaria: Optional[int] = None
-    id_herramienta: Optional[int] = None
-    cantidad: int
-    dias_alquiler: int
-    valor_unitario: float
-    subtotal: float
+class InventoryMovementResponse(BaseModel):
+    movement_id: int
+    product_id: int
+    quantity: int
+    movement_type: str
+    date_moved: Optional[datetime] = None
+    price: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==========================================
-# 8. COTIZACIONES
+# 5. COTIZACIONES
 # ==========================================
 
 class CotizacionCreate(BaseModel):
-    numero_cotizacion: str
-    id_cliente: int
-    id_usuario: int
-    subtotal: float = 0.0
-    iva: float = 0.0
-    total: float = 0.0
-    estado: str = "borrador"
-    observaciones: Optional[str] = None
+    user_id: int
+    iva: float
+    total_price: float
+    status: Optional[str] = "pending"
+    observations: Optional[str] = None
 
 
 class CotizacionResponse(BaseModel):
-    id_cotizacion: int
-    numero_cotizacion: str
-    id_cliente: int
-    id_usuario: int
-    fecha: datetime
-    subtotal: float
+    cotizacion_id: int
+    user_id: int
     iva: float
-    total: float
-    estado: str
-    observaciones: Optional[str] = None
+    date_created: Optional[datetime] = None
+    total_price: float
+    status: Optional[str] = None
+    observations: Optional[str] = None
+    created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
-
-# ==========================================
-# 9. AUDITORÍA
-# ==========================================
-
-class AuditoriaCreate(BaseModel):
-    id_usuario: Optional[int] = None
-    id_maquinaria: Optional[int] = None
-    movimiento: str
-    tiempo_alquiler: str
-    estado: str
-
-
-class AuditoriaResponse(BaseModel):
-    id_auditoria: int
-    id_usuario: Optional[int] = None
-    id_maquinaria: Optional[int] = None
-    movimiento: str
-    tiempo_alquiler: str
-    estado: str
-    fecha: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==========================================
-# 10. REPORTES
+# 6. DETALLE COTIZACIONES
 # ==========================================
 
-class ReporteCreate(BaseModel):
-    nombre: str
-    tipo: str
-    usuario: str
+class DetalleCotizacionCreate(BaseModel):
+    cotizacion_id: int
+    product_id: int
+    quantity: int
+    price: float
 
 
-class ReporteResponse(BaseModel):
-    id_reporte: int
-    nombre: str
-    tipo: str
-    fecha_generacion: datetime
-    usuario: str
+class DetalleCotizacionResponse(BaseModel):
+    detalle_id: int
+    cotizacion_id: int
+    product_id: int
+    quantity: int
+    price: float
 
-    class Config:
-        from_attributes = True
-
-
-# ==========================================
-# 11. NOTIFICACIONES
-# ==========================================
-
-class NotificacionCreate(BaseModel):
-    id_cliente: Optional[int] = None
-    id_cotizacion: Optional[int] = None
-    correo: EmailStr
-    mensaje: str
-    estado_envio: Optional[str] = "pendiente"
-
-
-class NotificacionResponse(BaseModel):
-    id_notificacion: int
-    id_cliente: Optional[int] = None
-    id_cotizacion: Optional[int] = None
-    correo: EmailStr
-    mensaje: str
-    estado_envio: str
-    fecha: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==========================================
-# ESQUEMA DE PRUEBA
+# 7. BILLING
 # ==========================================
 
-class UserSchema(BaseModel):
-    id: Optional[int] = None
-    name: str
-    email: str
+class BillingCreate(BaseModel):
+    cotizacion_id: int
+    total_amount: float
+
+
+class BillingResponse(BaseModel):
+    billing_id: int
+    cotizacion_id: int
+    total_amount: float
+    date_billed: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# 8. AUDIT
+# ==========================================
+
+class AuditCreate(BaseModel):
+    user_id: Optional[int] = None
+    table_name: str
+    record_id: int
+    action: str
+    description: Optional[str] = None
+
+
+class AuditResponse(BaseModel):
+    audit_id: int
+    user_id: Optional[int] = None
+    table_name: str
+    record_id: int
+    action: str
+    description: Optional[str] = None
+    date: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)

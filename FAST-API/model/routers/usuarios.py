@@ -1,66 +1,139 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 
 from config.database import get_db
-from ..models import Usuario
-from schema.schemas import UsuarioCreate, UsuarioResponse
-
-router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from ..models import User
+from schema.schemas import UserCreate, UserResponse
 
 
-@router.post("/", response_model=UsuarioResponse)
-def crear_usuario(data: UsuarioCreate, db: Session = Depends(get_db)):
-    existente = db.query(Usuario).filter(Usuario.email == data.email).first()
-    if existente:
-        raise HTTPException(status_code=400, detail="El email ya está registrado")
+router = APIRouter(
+    prefix="/users",
+    tags=["Users"]
+)
 
-    datos = data.dict()
-    datos["contrasena"] = pwd_context.hash(datos["contrasena"])
 
-    nuevo = Usuario(**datos)
+# ==========================================
+# CREAR USUARIO
+# ==========================================
+
+@router.post("/", response_model=UserResponse)
+def crear_usuario(
+    data: UserCreate,
+    db: Session = Depends(get_db)
+):
+    # Verificar si el correo ya existe
+    usuario_existente = db.query(User).filter(
+        User.email == data.email
+    ).first()
+
+    if usuario_existente:
+        raise HTTPException(
+            status_code=400,
+            detail="El correo electrónico ya está registrado"
+        )
+
+    nuevo = User(
+        username=data.username,
+        email=data.email,
+        password=data.password,
+        phone_number=data.phone_number,
+        status=data.status
+    )
+
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+
     return nuevo
 
 
-@router.get("/", response_model=list[UsuarioResponse])
-def listar_usuarios(db: Session = Depends(get_db)):
-    return db.query(Usuario).all()
+# ==========================================
+# LISTAR USUARIOS
+# ==========================================
+
+@router.get("/", response_model=list[UserResponse])
+def listar_usuarios(
+    db: Session = Depends(get_db)
+):
+    return db.query(User).all()
 
 
-@router.get("/{id}", response_model=UsuarioResponse)
-def obtener_usuario(id: int, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.id_usuario == id).first()
+# ==========================================
+# OBTENER USUARIO POR ID
+# ==========================================
+
+@router.get("/{user_id}", response_model=UserResponse)
+def obtener_usuario(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    usuario = db.query(User).filter(
+        User.user_id == user_id
+    ).first()
+
     if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=404,
+            detail="Usuario no encontrado"
+        )
+
     return usuario
 
 
-@router.put("/{id}", response_model=UsuarioResponse)
-def actualizar_usuario(id: int, data: UsuarioCreate, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.id_usuario == id).first()
+# ==========================================
+# ACTUALIZAR USUARIO
+# ==========================================
+
+@router.put("/{user_id}", response_model=UserResponse)
+def actualizar_usuario(
+    user_id: int,
+    data: UserCreate,
+    db: Session = Depends(get_db)
+):
+    usuario = db.query(User).filter(
+        User.user_id == user_id
+    ).first()
+
     if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=404,
+            detail="Usuario no encontrado"
+        )
 
-    datos = data.dict()
-    datos["contrasena"] = pwd_context.hash(datos["contrasena"])
+    usuario.username = data.username
+    usuario.email = data.email
+    usuario.password = data.password
+    usuario.phone_number = data.phone_number
+    usuario.status = data.status
 
-    for campo, valor in datos.items():
-        setattr(usuario, campo, valor)
     db.commit()
     db.refresh(usuario)
+
     return usuario
 
 
-@router.delete("/{id}")
-def eliminar_usuario(id: int, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.id_usuario == id).first()
+# ==========================================
+# ELIMINAR USUARIO
+# ==========================================
+
+@router.delete("/{user_id}")
+def eliminar_usuario(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    usuario = db.query(User).filter(
+        User.user_id == user_id
+    ).first()
+
     if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=404,
+            detail="Usuario no encontrado"
+        )
+
     db.delete(usuario)
     db.commit()
-    return {"mensaje": "Usuario eliminado correctamente"}
+
+    return {
+        "mensaje": "Usuario eliminado correctamente"
+    }

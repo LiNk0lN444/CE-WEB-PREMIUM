@@ -1,292 +1,154 @@
-*{
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    text-decoration: none;
-    font-family: 'Roboto', sans-serif;
+/* Contenedor principal con imagen de fondo */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image: url('/IMG/n.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  padding: 1rem;
 }
 
-body{
-    background-image: url("../IMG/m.png");
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-position: center;
-    background-attachment: fixed;
-    transition: all .4s ease;
+/* Tarjeta Glassmorphism */
+.login-card {
+  width: 100%;
+  max-width: 28rem;
+  padding: 2rem;
+  border-radius: 1rem;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  color: #ffffff;
 }
 
-/* ========================= */
-/* NAVBAR */
-/* ========================= */
-
-.navbar{
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    padding: 15px 8%;
-
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-
-    backdrop-filter: blur(10px);
-    background: rgba(255,0,0,.45);
-
-    z-index: 9999;
+/* Encabezados */
+.login-header {
+  text-align: center;
+  margin-bottom: 2rem;
 }
 
-.logo{
-    color: white;
-    font-size: 24px;
-    font-weight: bold;
+.login-title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #ef4444;
+  margin-bottom: 0.5rem;
 }
 
-.menu{
-    list-style: none;
-    display: flex;
-    gap: 25px;
+.login-subtitle {
+  font-size: 0.875rem;
+  color: #e5e7eb;
 }
 
-.menu a{
-    color: white;
-    font-weight: 600;
-    transition: .3s;
+/* Alerta de Error */
+.login-error {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background-color: rgba(239, 68, 68, 0.2);
+  border: 1px solid #ef4444;
+  border-radius: 0.5rem;
+  color: #fecaca;
+  font-size: 0.875rem;
+  text-align: center;
 }
 
-.menu a:hover{
-    color: #ffd4d4;
+/* Formularios y Grupos de Input */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
-.acciones{
-    display: flex;
-    align-items: center;
+.form-group {
+  display: flex;
+  flex-direction: column;
 }
 
-#themeBtn{
-    width: 45px;
-    height: 45px;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 18px;
-    background: white;
-    transition: .3s;
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
 }
 
-#themeBtn:hover{
-    transform: scale(1.1);
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
-/* ========================= */
-/* CONTENIDO LOGIN */
-/* ========================= */
-
-main{
-    width: 100%;
-    padding: 20px;
-    margin: auto;
-    margin-top: 140px;
+.form-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #111827;
+  border: 2px solid transparent;
+  outline: none;
+  transition: all 0.2s ease;
 }
 
-.contenedor__todo{
-    width: 100%;
-    max-width: 800px;
-    margin: auto;
-    position: relative;
+.form-input:focus {
+  border-color: #ef4444;
+  background-color: #ffffff;
 }
 
-.caja__trasera{
-    width: 100%;
-    max-width: 830px;
-    padding: 10px 20px;
-    display: flex;
-    justify-content: center;
-
-    backdrop-filter: blur(10px);
-    background-color: rgba(255, 0, 0, 0.5);
+.form-input-password {
+  padding-right: 3rem;
 }
 
-.caja__trasera div{
-    margin: 100px 40px;
-    color: white;
-    transition: all 500ms;
+/* Botón de ocultar/mostrar contraseña */
+.toggle-password-btn {
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1.125rem;
+  color: #4b5563;
+  padding: 0;
 }
 
-.caja__trasera div p,
-.caja__trasera button{
-    margin-top: 30px;
+.toggle-password-btn:hover {
+  color: #111827;
 }
 
-.caja__trasera div h3{
-    font-weight: 400;
-    font-size: 26px;
+/* Botón de Envío */
+.submit-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #ef4444;
+  color: #ffffff;
+  font-weight: 700;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-.caja__trasera div p{
-    font-size: 16px;
-    font-weight: 300;
+.submit-btn:hover {
+  background-color: #ffffff;
+  color: #ef4444;
 }
 
-.caja__trasera button{
-    padding: 10px 40px;
-    border: 2px solid #fff;
-    font-size: 14px;
-    background: transparent;
-    font-weight: 600;
-    cursor: pointer;
-    color: white;
-    transition: all 300ms;
+/* Pie de Registro */
+.login-footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #d1d5db;
 }
 
-.caja__trasera button:hover{
-    background: #fff;
-    color: #fd4646;
+.register-link {
+  color: #f87171;
+  font-weight: 600;
+  text-decoration: none;
 }
 
-/* ========================= */
-/* FORMULARIOS */
-/* ========================= */
-
-.contenedor__login-register{
-    display: flex;
-    align-items: center;
-    width: 100%;
-    max-width: 380px;
-
-    position: relative;
-    top: -185px;
-    left: 10px;
-
-    transition: left 500ms cubic-bezier(
-        0.175,
-        0.885,
-        0.320,
-        1.275
-    );
-}
-
-.contenedor__login-register form{
-    width: 100%;
-    padding: 80px 20px;
-    background: white;
-    position: absolute;
-    border-radius: 20px;
-}
-
-.contenedor__login-register form h2{
-    font-size: 30px;
-    text-align: center;
-    margin-bottom: 20px;
-    color: #fd4646;
-}
-
-.contenedor__login-register form input{
-    width: 100%;
-    margin-top: 20px;
-    padding: 10px;
-
-    border: none;
-    background: #F2F2F2;
-
-    font-size: 16px;
-    outline: none;
-}
-
-.contenedor__login-register form button{
-    padding: 10px 40px;
-    margin-top: 40px;
-
-    border: none;
-    background: #fd4646;
-
-    color: white;
-    font-size: 14px;
-    font-weight: 600;
-
-    cursor: pointer;
-}
-
-.formulario__login{
-    display: block;
-    opacity: 1;
-}
-
-.formulario__register{
-    display: none;
-}
-
-.form-msg{
-    display: block;
-    min-height: 0;
-    color: #c0392b;
-    background: #ffe3e3;
-    padding: 0;
-    border-radius: 6px;
-    font-size: 13px;
-    text-align: center;
-    transition: all .2s ease;
-}
-
-.form-msg:not(:empty){
-    padding: 8px 10px;
-    margin-top: 15px;
-}
-
-/* ========================= */
-/* MODO OSCURO: la foto siempre se ve, el rojo queda   */
-/* solo en los botones; navbar y caja__trasera pasan   */
-/* a negro                                             */
-/* ========================= */
-
-body.dark-mode .navbar{
-    background: rgba(0,0,0,.6);
-}
-
-body.dark-mode .caja__trasera{
-    background-color: rgba(0, 0, 0, .6);
-}
-
-/* ========================= */
-/* RESPONSIVE */
-/* ========================= */
-
-@media screen and (max-width:850px){
-
-    .navbar{
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .menu{
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    main{
-        margin-top: 180px;
-    }
-
-    .caja__trasera{
-        max-width: 350px;
-        height: 300px;
-
-        flex-direction: column;
-        margin: auto;
-    }
-
-    .caja__trasera div{
-        margin: 0;
-        position: absolute;
-    }
-
-    .contenedor__login-register{
-        top: -10px;
-        left: -5px;
-        margin: auto;
-    }
-
-    .contenedor__login-register form{
-        position: relative;
-    }
+.register-link:hover {
+  text-decoration: underline;
 }

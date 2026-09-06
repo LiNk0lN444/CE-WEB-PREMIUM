@@ -1,146 +1,101 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { ceObtenerSesion, ceIniciarSesion, ceRegistrar } from "../services/auth";
-import "../assets/css/login.css";
+import React, { useState } from 'react';
 
-export default function Login() {
-    const navigate = useNavigate();
-    const [isRegisterMode, setIsRegisterMode] = useState(false);
-    const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth > 850);
+export const Login = ({ onLoginSuccess }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
 
-    const [loginEmail, setLoginEmail] = useState("");
-    const [loginPassword, setLoginPassword] = useState("");
-    const [loginError, setLoginError] = useState("");
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError('');
 
-    const [regNombre, setRegNombre] = useState("");
-    const [regEmail, setRegEmail] = useState("");
-    const [regUsuario, setRegUsuario] = useState("");
-    const [regPassword, setRegPassword] = useState("");
-    const [regError, setRegError] = useState("");
+    // Validación básica
+    if (!email || !password) {
+      setError('Por favor, completa todos los campos.');
+      return;
+    }
 
-    const [darkMode, setDarkMode] = useState(localStorage.getItem("theme") === "dark");
-
-    useEffect(() => {
-        if (ceObtenerSesion()) {
-            navigate("/sesion");
-        }
-
-        const handleResize = () => setIsLargeScreen(window.innerWidth > 850);
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
-    }, [navigate]);
-
-    useEffect(() => {
-        if (darkMode) {
-            document.body.classList.add("dark-mode");
-            localStorage.setItem("theme", "dark");
-        } else {
-            document.body.classList.remove("dark-mode");
-            localStorage.setItem("theme", "light");
-        }
-    }, [darkMode]);
-
-    const validarEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-    const handleLoginSubmit = async (e) => {
-        e.preventDefault();
-        setLoginError("");
-
-        if (!validarEmail(loginEmail)) {
-            setLoginError("Ingresa un correo electrónico válido");
-            return;
-        }
-        if (!loginPassword) {
-            setLoginError("Ingresa tu contraseña");
-            return;
-        }
-
-        const res = await ceIniciarSesion(loginEmail, loginPassword);
-        if (!res.ok) {
-            setLoginError(res.motivo);
-            return;
-        }
-        navigate("/sesion");
+    // Aquí conectas con tu servicio de autenticación o localStorage
+    const usuarioSimulado = {
+      nombre: 'Usuario',
+      email: email,
+      rol: 'Cliente'
     };
 
-    const handleRegisterSubmit = async (e) => {
-        e.preventDefault();
-        setRegError("");
+    if (onLoginSuccess) {
+      onLoginSuccess(usuarioSimulado);
+    }
+  };
 
-        if (!validarEmail(regEmail)) {
-            setRegError("Ingresa un correo electrónico válido");
-            return;
-        }
-        if (regPassword.length < 8) {
-            setRegError("La contraseña debe tener al menos 8 caracteres");
-            return;
-        }
-
-        const res = await ceRegistrar({ 
-            nombre: regNombre, 
-            email: regEmail, 
-            usuario: regUsuario, 
-            contrasena: regPassword 
-        });
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-fixed px-4" style={{ backgroundImage: "url('/IMG/n.png')" }}>
+      
+      {/* Tarjeta de Login con estilo Glassmorphism */}
+      <div className="w-full max-w-md p-8 rounded-2xl backdrop-blur-md bg-black/45 border border-white/20 shadow-2xl text-white">
         
-        if (!res.ok) {
-            setRegError(res.motivo);
-            return;
-        }
-        navigate("/sesion");
-    };
-
-    return (
-        <div>
-            <nav className="navbar">
-                <a href="/" className="logo">Constructora CE</a>
-                <div className="acciones">
-                    <button onClick={() => setDarkMode(!darkMode)}>
-                        {darkMode ? "☀️" : "🌙"}
-                    </button>
-                </div>
-            </nav>
-
-            <main>
-                <div className="contenedor__todo">
-                    <div className="caja__trasera">
-                        <div className="caja__trasera-login" style={{ opacity: isRegisterMode && isLargeScreen ? 1 : 0 }}>
-                            <h3>¿Ya tienes una cuenta?</h3>
-                            <p>Inicia sesión para entrar en la página</p>
-                            <button onClick={() => setIsRegisterMode(false)}>Iniciar Sesión</button>
-                        </div>
-                        <div className="caja__trasera-register" style={{ opacity: !isRegisterMode && isLargeScreen ? 1 : 0 }}>
-                            <h3>¿Aún no tienes una cuenta?</h3>
-                            <p>Regístrate para que puedas iniciar sesión</p>
-                            <button onClick={() => setIsRegisterMode(true)}>Regístrarse</button>
-                        </div>
-                    </div>
-
-                    <div className="contenedor__login-register" style={{
-                        left: isLargeScreen ? (isRegisterMode ? "410px" : "10px") : "0px"
-                    }}>
-                        <form className="formulario__login" onSubmit={handleLoginSubmit}
-                            style={{ display: !isRegisterMode || !isLargeScreen ? "block" : "none" }}>
-                            <h2>Iniciar Sesión</h2>
-                            <input type="email" placeholder="Correo Electrónico" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
-                            <input type="password" placeholder="Contraseña" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
-                            <button type="submit">Entrar</button>
-                            <div className={`form-msg ${loginError ? "active" : ""}`}>{loginError}</div>
-                        </form>
-
-                        <form className="formulario__register" onSubmit={handleRegisterSubmit}
-                            style={{ display: isRegisterMode || !isLargeScreen ? "block" : "none" }}>
-                            <h2>Regístrarse</h2>
-                            <input type="text" placeholder="Nombre completo" value={regNombre} onChange={(e) => setRegNombre(e.target.value)} />
-                            <input type="email" placeholder="Correo Electrónico" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
-                            <input type="text" placeholder="Usuario" value={regUsuario} onChange={(e) => setRegUsuario(e.target.value)} />
-                            <input type="password" placeholder="Contraseña" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} />
-                            <button type="submit">Regístrarse</button>
-                            <div className={`form-msg ${regError ? "active" : ""}`}>{regError}</div>
-                        </form>
-                    </div>
-                </div>
-            </main>
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-red-500 mb-2">Iniciar Sesión</h2>
+          <p className="text-sm text-gray-200">Ingresa tus credenciales para acceder a tu cuenta</p>
         </div>
-    );
-}
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-200 text-sm text-center">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Campo Correo */}
+          <div>
+            <label className="block text-sm font-semibold mb-1">Correo Electrónico</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="ejemplo@correo.com"
+              className="w-full px-4 py-3 rounded-xl bg-white/90 text-gray-900 border-2 border-transparent focus:border-red-500 focus:bg-white outline-none transition-all duration-200"
+            />
+          </div>
+
+          {/* Campo Contraseña */}
+          <div>
+            <label className="block text-sm font-semibold mb-1">Contraseña</label>
+            <div className="relative flex items-center">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 pr-12 rounded-xl bg-white/90 text-gray-900 border-2 border-transparent focus:border-red-500 focus:bg-white outline-none transition-all duration-200"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 text-gray-600 hover:text-gray-900 text-lg focus:outline-none"
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
+          </div>
+
+          {/* Acciones */}
+          <button
+            type="submit"
+            className="w-full py-3 bg-red-500 hover:bg-white hover:text-red-500 font-bold text-white rounded-xl transition-all duration-300 shadow-md"
+          >
+            Ingresar
+          </button>
+        </form>
+
+        {/* Pie de Registro */}
+        <div className="mt-6 text-center text-sm text-gray-300">
+          ¿No tienes una cuenta?{' '}
+          <a href="#registro" className="text-red-400 font-semibold hover:underline">
+            Regístrate aquí
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};

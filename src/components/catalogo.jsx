@@ -1,63 +1,160 @@
-import React from 'react';
-import '../assests/css/catalogo.css'; // O '../assests/CSS/catalogo.css' según el nombre exacto de tu carpeta
+import React, { useState, useEffect } from 'react';
+import { obtenerProductos } from '../services/api';
+import '../assests/css/catalogo.css';
 
-export default function Catalogo() {
+export default function Catalogo({ darkMode }) {
+  const [productos, setProductos] = useState([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    cargarProductos();
+  }, []);
+
+  async function cargarProductos() {
+    try {
+      setCargando(true);
+      setError('');
+
+      const data = await obtenerProductos();
+      setProductos(data);
+    } catch (error) {
+      console.error('Error cargando catálogo:', error);
+      setError(
+        'No fue posible cargar los productos. Verifica que FastAPI esté ejecutándose.'
+      );
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  const productosFiltrados = productos.filter((item) => {
+    const texto = busqueda.toLowerCase();
+
     return (
-        <div className="catalogo-page">
-            <header>
-                <nav className="navbar">
-                    <div className="logo">CE-Web Constructora</div>
-                    <ul className="menu">
-                        <li><a href="/">Inicio</a></li>
-                        <li><a href="/#nosotros">Nosotros</a></li>
-                        <li><a href="/catalogo">Catálogo</a></li>
-                        <li><a href="/inventario">Inventario</a></li>
-                        <li><a href="/#servicios">Servicios</a></li>
-                        <li><a href="/#contacto">Contacto</a></li>
-                    </ul>
-                    <div className="acciones">
-                        <button id="themeBtn">🌙</button>
-                        <div className="nav-auth" id="navAuth"></div>
-                    </div>
-                </nav>
-            </header>
-
-            <section id="inicio" className="hero">
-                <div className="hero-content">
-                    <h1>Catálogo</h1>
-                    <p>En este espacio podrás visualizar nuestra maquinaria y herramientas disponibles</p>
-                    <a href="#catalogo" className="btn">Ver catálogo</a>
-                </div>
-            </section>
-
-            <section id="catalogo" className="section">
-                <h2 className="title-pro">Nuestros Productos</h2>
-
-                <div className="filtros" id="filtros">
-                    {/* Los botones de categoría se pueden renderizar dinámicamente aquí con estados */}
-                </div>
-
-                <div className="buscador">
-                    <input
-                        type="text"
-                        id="buscadorInput"
-                        placeholder="🔍 Buscar producto por nombre..."
-                        autoComplete="off"
-                    />
-                </div>
-
-                <div className="grid-productos" id="gridProductos">
-                    {/* Las tarjetas de producto se insertan aquí */}
-                </div>
-
-                <p className="sin-resultados" id="sinResultados" style={{ display: 'none' }}>
-                    No se encontraron productos con ese criterio.
-                </p>
-            </section>
-
-            <footer>
-                <p>© 2026 CE Constructora | Todos los derechos reservados</p>
-            </footer>
-        </div>
+      item.name?.toLowerCase().includes(texto) ||
+      item.type?.toLowerCase().includes(texto) ||
+      item.model_number?.toLowerCase().includes(texto)
     );
+  });
+
+  return (
+    <div className={`catalogo-page ${darkMode ? 'theme-dark' : 'theme-light'}`}>
+      <section id="inicio" className="hero">
+        <div className="hero-content">
+          <h1>Catálogo</h1>
+          <p>
+            En este espacio podrás visualizar nuestra maquinaria y herramientas disponibles.
+          </p>
+
+          <a href="#catalogo" className="btn">
+            Ver catálogo
+          </a>
+        </div>
+      </section>
+
+      <section id="catalogo" className="section">
+        <h2 className="title-pro">
+          Nuestros Productos
+        </h2>
+
+        <div className="buscador">
+          <input
+            type="text"
+            placeholder="🔍 Buscar producto..."
+            autoComplete="off"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+
+        {cargando && (
+          <p style={{ textAlign: 'center', marginTop: '2rem' }}>
+            Cargando catálogo...
+          </p>
+        )}
+
+        {error && (
+          <div className="sin-resultados">
+            <p>{error}</p>
+
+            <button
+              className="btn"
+              onClick={cargarProductos}
+            >
+              Intentar nuevamente
+            </button>
+          </div>
+        )}
+
+        {!cargando && !error && (
+          <div className="grid-productos">
+            {productosFiltrados.map((item) => (
+              <div
+                key={item.product_id}
+                className="tarjeta-producto"
+              >
+                <img
+                  src={
+                    item.image_url
+                      ? item.image_url.startsWith('http') || item.image_url.startsWith('/')
+                        ? item.image_url
+                        : `/IMG/${item.image_url}`
+                      : 'https://via.placeholder.com/300x200?text=Sin+imagen'
+                  }
+                  alt={item.name}
+                />
+
+                <div className="producto-info">
+                  <span className="producto-tipo">
+                    {item.type}
+                  </span>
+
+                  <h3>
+                    {item.name}
+                  </h3>
+
+                  <p>
+                    {item.description || 'Sin descripción disponible.'}
+                  </p>
+
+                  {item.model_number && (
+                    <p>
+                      <strong>Modelo:</strong>{' '}
+                      {item.model_number}
+                    </p>
+                  )}
+
+                  <p>
+                    <strong>Disponibles:</strong>{' '}
+                    {item.stock_quantity}
+                  </p>
+
+                  <p>
+                    <strong>Estado:</strong>{' '}
+                    {item.status}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!cargando &&
+          !error &&
+          productosFiltrados.length === 0 && (
+            <p className="sin-resultados">
+              No se encontraron productos con ese criterio.
+            </p>
+          )}
+      </section>
+
+      <footer>
+        <p>
+          © 2026 CE Constructora | Todos los derechos reservados
+        </p>
+      </footer>
+    </div>
+  );
 }
