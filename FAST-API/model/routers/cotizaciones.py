@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from ..models import Cotizacion
+from ..models import Cotizacion, User
 from schema.schemas import CotizacionCreate, CotizacionResponse
+from ..utils.email_utils import enviar_correo, cuerpo_confirmacion_cotizacion
 
 
 router = APIRouter(
@@ -17,6 +18,18 @@ def crear_cotizacion(
     data: CotizacionCreate,
     db: Session = Depends(get_db)
 ):
+    # Buscar el usuario que está realizando la cotización
+    usuario = db.query(User).filter(
+        User.user_id == data.user_id
+    ).first()
+
+    if not usuario:
+        raise HTTPException(
+            status_code=404,
+            detail="Usuario no encontrado"
+        )
+
+    # Crear la cotización
     nueva = Cotizacion(
         user_id=data.user_id,
         iva=data.iva,
@@ -28,6 +41,23 @@ def crear_cotizacion(
     db.add(nueva)
     db.commit()
     db.refresh(nueva)
+
+    # Número de cotización basado en el ID generado por PostgreSQL
+    numero_cotizacion = f"COT-{nueva.cotizacion_id}"
+
+    # Crear contenido del correo
+    cuerpo = cuerpo_confirmacion_cotizacion(
+        usuario.username,
+        numero_cotizacion,
+        f"{nueva.total_price:,.0f}"
+    )
+
+    # Enviar correo de confirmación
+    enviar_correo(
+        usuario.email,
+        f"Confirmación de cotización {numero_cotizacion}",
+        cuerpo
+    )
 
     return nueva
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import '../assests/css/cotizaciones.css';
+import { crearCotizacion } from '../services/api';
 
 const ITEMS_DISPONIBLES = [
   { id: 1, tipo: 'maquinaria', nombre: 'Cargador Frontal 966', precio: 2500000 },
@@ -104,30 +105,49 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
 
   // GUARDAR COTIZACIÓN CON CONTROL DE SESIÓN
-  const handleGuardarCotizacion = () => {
-    setErrorMsg('');
+  const handleGuardarCotizacion = async () => {
+  setErrorMsg('');
 
-    if (carrito.length === 0) {
-      setErrorMsg('Debes agregar al menos un ítem a la cotización.');
-      return;
+  if (carrito.length === 0) {
+    setErrorMsg('Debes agregar al menos un ítem a la cotización.');
+    return;
+  }
+
+  // Verificar sesión
+  if (!usuarioSesion) {
+    alert('Para guardar y procesar tu cotización debes iniciar sesión o registrarte.');
+
+    if (onNavigateLogin) {
+      onNavigateLogin();
     }
 
-    // Si el usuario no ha iniciado sesión
-    if (!usuarioSesion) {
-      alert('Para guardar y procesar tu cotización debes iniciar sesión o registrarte.');
-      if (onNavigateLogin) {
-        onNavigateLogin();
-      }
-      return;
-    }
+    return;
+  }
 
+  // Verificar que tengamos el ID del usuario
+  if (!usuarioSesion.user_id) {
+    setErrorMsg('No se pudo identificar el usuario. Inicia sesión nuevamente.');
+    return;
+  }
+
+  try {
+    // Enviar cotización al backend
+    const cotizacionGuardada = await crearCotizacion({
+      user_id: usuarioSesion.user_id,
+      iva: iva,
+      total_price: total,
+      status: 'pending',
+      observations: observaciones
+    });
+
+    // Crear información para mostrar en el historial
     const nuevaCotizacion = {
-      numero: `COT-${Math.floor(1000 + Math.random() * 9000)}`,
+      numero: `COT-${cotizacionGuardada.cotizacion_id}`,
       fecha: new Date().toLocaleDateString('es-CO'),
       cliente: {
-        nombre: usuarioSesion.nombre || 'Usuario Registrado',
+        nombre: usuarioSesion.username || usuarioSesion.nombre || 'Usuario Registrado',
         correo: usuarioSesion.email || usuarioSesion.correo || 'correo@registrado.com',
-        telefono: usuarioSesion.telefono || 'No registrado'
+        telefono: usuarioSesion.phone_number || usuarioSesion.telefono || 'No registrado'
       },
       items: [...carrito],
       subtotal,
@@ -137,11 +157,32 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
       estado: 'enviada'
     };
 
-    setHistorialCotizaciones([nuevaCotizacion, ...historialCotizaciones]);
+    // Guardar también en el historial visual
+    setHistorialCotizaciones([
+      nuevaCotizacion,
+      ...historialCotizaciones
+    ]);
+
+    // Limpiar carrito
     handleLimpiarTodo();
+
+    // Mostrar listado
     setTabActiva('listado');
-    alert(`¡Cotización ${nuevaCotizacion.numero} generada con éxito! 🎉`);
-  };
+
+    alert(
+      `¡Cotización ${nuevaCotizacion.numero} generada con éxito! 🎉\n\n` +
+      `Se ha enviado una confirmación al correo ${usuarioSesion.email}.`
+    );
+
+  } catch (error) {
+    console.error('Error creando cotización:', error);
+
+    setErrorMsg(
+      error.message ||
+      'No fue posible generar la cotización. Verifica que FastAPI esté ejecutándose.'
+    );
+  }
+};
 
   const handleLimpiarTodo = () => {
     setCarrito([]);

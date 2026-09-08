@@ -124,12 +124,12 @@ class Cotizacion(Base):
         ForeignKey("users.user_id"),
         nullable=False
     )
-    iva = Column(Numeric(5, 2), nullable=False)
+    iva = Column(Numeric(12, 2), nullable=False)  # <-- Corregido a 12,2
     date_created = Column(
         TIMESTAMP,
         server_default=func.current_timestamp()
     )
-    total_price = Column(Numeric(10, 2), nullable=False)
+    total_price = Column(Numeric(12, 2), nullable=False)  # <-- Corregido a 12,2
     status = Column(String(20), default="pending")
     observations = Column(Text)
     created_at = Column(

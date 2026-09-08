@@ -38,7 +38,7 @@ export default function App() {
     <div className={`app-root ${darkMode ? 'theme-dark' : 'theme-light'}`}>
       <header className="navbar-global">
         <div className="brand-title" onClick={() => setVistaActual('inicio')}>
-          <span className="brand-accent">CE-Web</span>
+          <span className="brand-accent">🛠️ CE-Web</span>
         </div>
 
         <nav>
@@ -53,11 +53,16 @@ export default function App() {
                 Catálogo
               </button>
             </li>
-            <li>
-              <button className={vistaActual === 'inventario' ? 'active' : ''} onClick={() => setVistaActual('inventario')}>
-                Inventario 🔒
-              </button>
-            </li>
+
+            {/* El botón de Inventario solo se muestra si usuarioSesion tiene datos (está logueado) */}
+            {usuarioSesion && (
+              <li>
+                <button className={vistaActual === 'inventario' ? 'active' : ''} onClick={() => setVistaActual('inventario')}>
+                  Inventario 🔒
+                </button>
+              </li>
+            )}
+
             <li>
               <button className={vistaActual === 'cotizaciones' ? 'active' : ''} onClick={() => setVistaActual('cotizaciones')}>
                 Cotizaciones
