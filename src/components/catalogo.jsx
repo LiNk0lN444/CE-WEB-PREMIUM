@@ -2,11 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { obtenerProductos } from '../services/api';
 import '../assests/css/catalogo.css';
 
-// Importación dinámica de imágenes locales
-const imagenesLocales = import.meta.glob('../assests/IMG/*.{png,jpg,jpeg,svg}', {
-  eager: true,
-  import: 'default'
-});
+// 🌟 IMPORTACIÓN DIRECTA DE TUS IMÁGENES (Con un solo nivel ../ porque estás en src/components/)
+import imgCar966 from '../assests/IMG/car966.png';
+import imgPuli from '../assests/IMG/puli.png';
+import imgEx from '../assests/IMG/ex.png';
+import imgRoto from '../assests/IMG/roto.png';
+
+// Creamos un diccionario seguro para asociar el nombre del archivo con su importación
+const MAPA_IMAGENES = {
+  'car966.png': imgCar966,
+  'puli.png': imgPuli,
+  'ex.png': imgEx,
+  'roto.png': imgRoto
+};
 
 // DATOS DE PRUEBA (MOCK)
 const PRODUCTOS_DE_PRUEBA = [
@@ -62,6 +70,12 @@ export default function Catalogo({ darkMode }) {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('todos');
   const [cargando, setCargando] = useState(true);
 
+  // ESTADO PARA EL MODAL DE FICHA TÉCNICA
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+
+  // ESTADO PARA LA NOTIFICACIÓN FLOTANTE DE COTIZACIÓN
+  const [mensajeCotizacion, setMensajeCotizacion] = useState(null);
+
   // ESTADO DEL CARRITO DE COTIZACIÓN
   const [carrito, setCarrito] = useState(() => {
     const guardado = localStorage.getItem('carrito_cotizacion');
@@ -95,32 +109,24 @@ export default function Catalogo({ darkMode }) {
     }
   }
 
-  // Resolver la ruta de la imagen local ignorando URLs de prueba del backend
+  // Resolver la ruta de la imagen local usando el mapa estático de confianza
   function obtenerRutaImagen(nombreImagen) {
     if (!nombreImagen) return null;
 
     let nombreArchivo = nombreImagen;
     
-    // Si viene como URL completa
     if (nombreImagen.startsWith('http')) {
-      // Si es una URL de prueba del tipo img.example.com, extraemos el nombre del archivo final
       if (nombreImagen.includes('img.example.com')) {
         const partes = nombreImagen.split('/');
         nombreArchivo = partes[partes.length - 1];
       } else {
-        // Si es una URL externa real y válida, la devolvemos tal cual
         return nombreImagen;
       }
     }
 
-    const nombreLimpio = nombreArchivo.replace(/^\/?(IMG\/)?/, '');
-    
-    // Buscar coincidencia insensible a mayúsculas/minúsculas en las imágenes locales
-    const claveEncontrada = Object.keys(imagenesLocales).find((key) =>
-      key.toLowerCase().endsWith(`/${nombreLimpio.toLowerCase()}`)
-    );
+    const nombreLimpio = nombreArchivo.replace(/^\/?(IMG\/)?/, '').trim().toLowerCase();
 
-    return claveEncontrada ? imagenesLocales[claveEncontrada] : null;
+    return MAPA_IMAGENES[nombreLimpio] || null;
   }
 
   // AGREGAR AL CARRITO DE COTIZACIÓN
@@ -137,24 +143,21 @@ export default function Catalogo({ darkMode }) {
       return [...actual, { ...producto, cantidad: 1 }];
     });
 
-    alert(`¡"${producto.name}" se agregó a tu lista de cotización! 📋`);
+    setMensajeCotizacion(`¡"${producto.name}" se agregó a tu lista de cotización! 📋`);
+    
+    setTimeout(() => {
+      setMensajeCotizacion(null);
+    }, 3000);
   }
 
-  // ABRIR PDF O LEER MÁS
   function abrirFichaTecnica(producto) {
     if (producto.pdf_url) {
       window.open(producto.pdf_url, '_blank');
     } else {
-      alert(
-        `📄 Ficha Técnica: ${producto.name}\n\n` +
-        `Modelo: ${producto.model_number || 'N/A'}\n` +
-        `Categoría: ${producto.type}\n` +
-        `Descripción: ${producto.description || 'Sin detalles adicionales.'}`
-      );
+      setProductoSeleccionado(producto);
     }
   }
 
-  // Filtrado de productos
   const productosFiltrados = productos.filter((item) => {
     const texto = busqueda.toLowerCase();
     const coincideTexto =
@@ -171,7 +174,6 @@ export default function Catalogo({ darkMode }) {
 
   return (
     <div className={`catalogo-page ${darkMode ? 'theme-dark' : 'theme-light'}`}>
-      {/* HERO SECTION */}
       <section id="inicio" className="hero">
         <div className="hero-content">
           <h1>Catálogo</h1>
@@ -184,11 +186,9 @@ export default function Catalogo({ darkMode }) {
         </div>
       </section>
 
-      {/* SECCIÓN CATÁLOGO */}
       <section id="catalogo" className="section">
         <h2 className="title-pro">Nuestros Productos</h2>
 
-        {/* BOTONES DE FILTRO */}
         <div className="filtros">
           <button
             type="button"
@@ -213,7 +213,6 @@ export default function Catalogo({ darkMode }) {
           </button>
         </div>
 
-        {/* BUSCADOR */}
         <div className="buscador">
           <input
             type="text"
@@ -224,14 +223,12 @@ export default function Catalogo({ darkMode }) {
           />
         </div>
 
-        {/* CARGANDO */}
         {cargando && (
           <p style={{ textAlign: 'center', marginTop: '2rem' }}>
             Cargando catálogo...
           </p>
         )}
 
-        {/* LISTADO DE PRODUCTOS */}
         {!cargando && (
           <div className="grid-productos">
             {productosFiltrados.map((item) => {
@@ -272,7 +269,6 @@ export default function Catalogo({ darkMode }) {
                     </div>
                   </div>
 
-                  {/* BOTONES DE ACCIÓN EN CADA TARJETA */}
                   <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
                     <button
                       type="button"
@@ -302,7 +298,6 @@ export default function Catalogo({ darkMode }) {
           </div>
         )}
 
-        {/* SIN RESULTADOS */}
         {!cargando && productosFiltrados.length === 0 && (
           <p className="sin-resultados">
             No se encontraron productos en esta categoría o búsqueda.
@@ -310,7 +305,57 @@ export default function Catalogo({ darkMode }) {
         )}
       </section>
 
-      {/* FOOTER */}
+      {productoSeleccionado && (
+        <div className="modal-overlay-custom" onClick={() => setProductoSeleccionado(null)}>
+          <div className="modal-content-custom" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header-custom">
+              <h3>📄 Ficha Técnica: {productoSeleccionado.name}</h3>
+              <button className="btn-close-custom" onClick={() => setProductoSeleccionado(null)}>✕</button>
+            </div>
+            
+            <div className="modal-body-custom">
+              <p><strong>Modelo:</strong> {productoSeleccionado.model_number || 'N/A'}</p>
+              <p><strong>Categoría:</strong> {productoSeleccionado.type}</p>
+              <p><strong>Descripción:</strong> {productoSeleccionado.description || 'Sin detalles adicionales.'}</p>
+              <p><strong>Stock Disponible:</strong> {productoSeleccionado.stock_quantity}</p>
+            </div>
+
+            <div className="modal-footer-custom" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              {productoSeleccionado.pdf_url ? (
+                <a 
+                  href={productoSeleccionado.pdf_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="btn-pro"
+                  style={{ textAlign: 'center', textDecoration: 'none', flex: 1 }}
+                >
+                  Ver Documento PDF 📑
+                </a>
+              ) : (
+                <p style={{ fontSize: '0.85rem', color: '#aaa', alignSelf: 'center', flex: 1 }}>
+                  Este equipo no cuenta con un PDF externo adjunto.
+                </p>
+              )}
+              
+              <button 
+                type="button" 
+                className="btn-pro" 
+                style={{ backgroundColor: '#d32f2f', flex: 1 }}
+                onClick={() => setProductoSeleccionado(null)}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mensajeCotizacion && (
+        <div className="toast-notificacion">
+          <span>{mensajeCotizacion}</span>
+        </div>
+      )}
+
       <footer>
         <p>© 2026 CE Constructora | Todos los derechos reservados</p>
       </footer>
