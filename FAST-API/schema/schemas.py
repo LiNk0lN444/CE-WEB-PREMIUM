@@ -7,24 +7,33 @@ from datetime import datetime
 # 1. USERS
 # ==========================================
 
-class UserCreate(BaseModel):
+# Base común
+class UserBase(BaseModel):
     username: str
-    email: EmailStr
-    password: str
+    email: str
     phone_number: Optional[str] = None
-    status: Optional[str] = "active"
+    status: str = "active"
 
+# Para crear usuario (desde el frontend público)
+class UserCreate(UserBase):
+    password: str
 
+# Para admin (crear otros admins)
+class UserCreateAdmin(UserBase):
+    password: str
+    role: str = "client"
+
+# Para responder al frontend
 class UserResponse(BaseModel):
     user_id: int
     username: str
-    email: EmailStr
+    email: str
     phone_number: Optional[str] = None
-    status: Optional[str] = None
-    date_registered: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    status: str
+    role: str          # 👈 añadido
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
 # ==========================================
@@ -182,3 +191,19 @@ class AuditResponse(BaseModel):
     date: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+# ============================
+# AUTH (para login)
+# ============================
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    phone_number: Optional[str] = None
+    status: str
+    role: str

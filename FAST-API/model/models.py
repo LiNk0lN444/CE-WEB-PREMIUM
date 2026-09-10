@@ -22,6 +22,7 @@ class User(Base):
     password = Column(String(255), nullable=False)
     phone_number = Column(String(15))
     status = Column(String(20), default="active")
+    role = Column(String(20), nullable=False, default="client")
     date_registered = Column(
         TIMESTAMP,
         server_default=func.current_timestamp()

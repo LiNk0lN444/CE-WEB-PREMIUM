@@ -345,3 +345,13 @@ VALUES
 INSERT INTO billing (cotizacion_id, total_amount) 
 VALUES 
 (1, 1071000.00);
+ALTER TABLE Users
+ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'client'
+CHECK (role IN ('client', 'admin'));
+IF TG_TABLE_NAME = 'users' AND OLD.role IS DISTINCT FROM NEW.role THEN
+    v_description := v_description || 
+        ' | Cambio de rol: ' || OLD.role || ' → ' || NEW.role;
+END IF;
+UPDATE Users
+SET role = 'admin'
+WHERE email = 'david.perez@example.com';

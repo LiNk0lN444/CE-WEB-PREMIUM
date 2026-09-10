@@ -1,0 +1,33 @@
+# ==========================================
+# FASTAPI + SERVIDOR
+# ==========================================
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+
+# ==========================================
+# BASE DE DATOS (PostgreSQL)
+# ==========================================
+SQLAlchemy==2.0.25
+psycopg2-binary==2.9.9
+
+# ==========================================
+# VALIDACIÓN / SCHEMAS
+# ==========================================
+pydantic==2.5.3
+pydantic[email]==2.5.3
+email-validator==2.1.0
+
+# ==========================================
+# SEGURIDAD / HASH DE CONTRASEÑAS
+# ==========================================
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+# ==========================================
+# VARIABLES DE ENTORNO
+# ==========================================
+python-dotenv==1.0.0
+
+# ==========================================
+# CORS (para que React pueda conectarse)
+# ==========================================
+# Ya viene incluido en fastapi, no requiere instalación extra

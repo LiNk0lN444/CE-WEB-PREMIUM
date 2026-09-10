@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Importaciones locales
 from config.database import Base, engine
 from model.routers import all_routers
-
+from model.routers import usuarios, auth
 
 # Verifica que las tablas definidas en los modelos existan
 try:
@@ -49,3 +49,5 @@ def root():
     return {
         "mensaje": "API CE Web funcionando correctamente"
     }
+app.include_router(auth.router)
+app.include_router(usuarios.router)

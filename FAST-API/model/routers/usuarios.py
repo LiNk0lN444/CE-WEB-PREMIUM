@@ -1,63 +1,40 @@
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from ..models import User
 from schema.schemas import UserCreate, UserResponse
+from model.models import User
+from model.security import hash_password
 
+router = APIRouter(prefix="/users", tags=["Users"])
 
-router = APIRouter(
-    prefix="/users",
-    tags=["Users"]
-)
-
-
-# ==========================================
-# CREAR USUARIO
-# ==========================================
-
+# ✅ Endpoint público — SIEMPRE crea client
 @router.post("/", response_model=UserResponse)
-def crear_usuario(
-    data: UserCreate,
-    db: Session = Depends(get_db)
-):
-    # Verificar si el correo ya existe
-    usuario_existente = db.query(User).filter(
-        User.email == data.email
-    ).first()
-
-    if usuario_existente:
-        raise HTTPException(
-            status_code=400,
-            detail="El correo electrónico ya está registrado"
-        )
+def crear_usuario(user: UserCreate, db: Session = Depends(get_db)):
+    # Verificar email duplicado
+    existente = db.query(User).filter(User.email == user.email).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="El correo ya está registrado.")
 
     nuevo = User(
-        username=data.username,
-        email=data.email,
-        password=data.password,
-        phone_number=data.phone_number,
-        status=data.status
+        username=user.username,
+        email=user.email,
+        password=hash_password(user.password),
+        phone_number=user.phone_number,
+        status="active",
+        role="client"              # 👈 forzado en el backend
     )
-
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
-
     return nuevo
 
-
-# ==========================================
-# LISTAR USUARIOS
-# ==========================================
-
+# ✅ Listar usuarios (protegido — solo admins)
 @router.get("/", response_model=list[UserResponse])
-def listar_usuarios(
-    db: Session = Depends(get_db)
-):
+def listar_usuarios(db: Session = Depends(get_db)):
+    # (por ahora abierto, luego le añadimos protección)
     return db.query(User).all()
-
-
 # ==========================================
 # OBTENER USUARIO POR ID
 # ==========================================

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import '../assests/css/AuthPage.css';
-import { obtenerUsuarios, crearUsuario } from '../services/api';
+import { crearUsuario, login } from '../services/api';
 
 export default function AuthPage({ onLoginSuccess, onCancel }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -22,33 +22,41 @@ export default function AuthPage({ onLoginSuccess, onCancel }) {
     setTimeout(() => setToast(null), 3500);
   };
 
+  // ==========================================
+  // LOGIN — usa /auth/login (SÍ valida contraseña)
+  // ==========================================
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
     try {
-      const usuarios = await obtenerUsuarios();
+      // ✅ Enviamos email + password al backend para que los valide
+      const usuario = await login({
+        email: loginEmail.trim(),
+        password: loginPassword
+      });
 
-      const usuarioEncontrado = usuarios.find(
-        (u) => u.email && u.email.trim().toLowerCase() === loginEmail.trim().toLowerCase()
-      );
-
-      if (!usuarioEncontrado) {
-        throw new Error('El correo ingresado no está registrado.');
+      // Si llegamos aquí, las credenciales son correctas
+      if (onLoginSuccess) {
+        onLoginSuccess(usuario);
       }
-
-      if (onLoginSuccess) onLoginSuccess(usuarioEncontrado);
     } catch (err) {
-      setError(err.message || 'No fue posible iniciar sesión. Intenta nuevamente.');
+      // El backend devuelve 401 con "Correo o contraseña incorrectos."
+      setError(err.message || 'Correo o contraseña incorrectos.');
     } finally {
       setLoading(false);
     }
   };
 
+  // ==========================================
+  // REGISTRO
+  // ==========================================
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
     try {
       await crearUsuario({
         username: regUsername,
@@ -233,6 +241,26 @@ export default function AuthPage({ onLoginSuccess, onCancel }) {
         .cot-btn-secundario:hover {
           border-color: #6f6f75;
           color: #f2f0ee;
+        }
+
+        .toast-notificacion {
+          position: fixed;
+          bottom: 30px;
+          right: 30px;
+          padding: 14px 22px;
+          border-radius: 10px;
+          font-weight: 600;
+          font-size: 14px;
+          color: #fff;
+          background: #2e7d32;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+          z-index: 9999;
+          animation: slideInToast 0.35s ease-out;
+        }
+
+        @keyframes slideInToast {
+          from { transform: translateX(120%); opacity: 0; }
+          to   { transform: translateX(0);     opacity: 1; }
         }
       `}</style>
 

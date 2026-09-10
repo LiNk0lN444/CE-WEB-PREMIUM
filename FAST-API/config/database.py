@@ -14,11 +14,20 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql+psycopg2://postgres:1508@localhost:5432/ce_web"
 )
 
+
+
+
+if not DATABASE_URL:
+    raise ValueError(
+        "❌ Falta la variable DATABASE_URL. "
+        "Crea un archivo .env en la raíz de FAST-API basándote en .env.example"
+    )
+
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Dependencia para inyectar la sesión en los endpoints
+
 def get_db():
     db = SessionLocal()
     try:

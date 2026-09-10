@@ -1,11 +1,6 @@
 // ==========================================
 // CONFIGURACIÓN DE LA API (Vite)
 // ==========================================
-// ✅ Vite lee las variables de entorno con import.meta.env
-//    y solo las que empiezan con VITE_.
-//    - .env       → VITE_API_URL=https://tu-dominio.com
-//    - .env.local → VITE_API_URL=http://localhost:8000
-
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 if (!API_URL && import.meta.env.DEV) {
@@ -47,7 +42,6 @@ async function request(endpoint, options = {}) {
 
     return response.json();
   } catch (err) {
-    // ✅ Convertimos el error de red del navegador a un mensaje amigable
     if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
       throw new Error('No hay conexión con el servicio. Verifica tu red e intenta de nuevo.');
     }
@@ -125,6 +119,16 @@ export async function obtenerUsuario(userId) {
 
 export async function crearUsuario(datos) {
   return request('/users/', { method: 'POST', body: JSON.stringify(datos) });
+}
+
+// ==========================================
+// AUTH  👈 NUEVO
+// ==========================================
+export async function login(credenciales) {
+  return request('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(credenciales),
+  });
 }
 
 // ==========================================
