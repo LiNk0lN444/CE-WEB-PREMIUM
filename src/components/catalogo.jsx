@@ -2,13 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { obtenerProductos } from '../services/api';
 import '../assests/css/catalogo.css';
 
-// 🌟 IMPORTACIÓN DIRECTA DE TUS IMÁGENES (Con un solo nivel ../ porque estás en src/components/)
 import imgCar966 from '../assests/IMG/car966.png';
 import imgPuli from '../assests/IMG/puli.png';
 import imgEx from '../assests/IMG/ex.png';
 import imgRoto from '../assests/IMG/roto.png';
 
-// Creamos un diccionario seguro para asociar el nombre del archivo con su importación
 const MAPA_IMAGENES = {
   'car966.png': imgCar966,
   'puli.png': imgPuli,
@@ -16,7 +14,6 @@ const MAPA_IMAGENES = {
   'roto.png': imgRoto
 };
 
-// DATOS DE PRUEBA (MOCK)
 const PRODUCTOS_DE_PRUEBA = [
   {
     product_id: 1,
@@ -69,20 +66,14 @@ export default function Catalogo({ darkMode }) {
   const [busqueda, setBusqueda] = useState('');
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('todos');
   const [cargando, setCargando] = useState(true);
-
-  // ESTADO PARA EL MODAL DE FICHA TÉCNICA
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
-
-  // ESTADO PARA LA NOTIFICACIÓN FLOTANTE DE COTIZACIÓN
   const [mensajeCotizacion, setMensajeCotizacion] = useState(null);
 
-  // ESTADO DEL CARRITO DE COTIZACIÓN
   const [carrito, setCarrito] = useState(() => {
     const guardado = localStorage.getItem('carrito_cotizacion');
     return guardado ? JSON.parse(guardado) : [];
   });
 
-  // Guardar carrito en localStorage cuando cambie
   useEffect(() => {
     localStorage.setItem('carrito_cotizacion', JSON.stringify(carrito));
   }, [carrito]);
@@ -101,20 +92,18 @@ export default function Catalogo({ darkMode }) {
       } else {
         setProductos(PRODUCTOS_DE_PRUEBA);
       }
-    } catch (err) {
-      console.warn('Backend no detectado. Modo diseño activado.');
+    } catch {
       setProductos(PRODUCTOS_DE_PRUEBA);
     } finally {
       setCargando(false);
     }
   }
 
-  // Resolver la ruta de la imagen local usando el mapa estático de confianza
   function obtenerRutaImagen(nombreImagen) {
     if (!nombreImagen) return null;
 
     let nombreArchivo = nombreImagen;
-    
+
     if (nombreImagen.startsWith('http')) {
       if (nombreImagen.includes('img.example.com')) {
         const partes = nombreImagen.split('/');
@@ -125,11 +114,9 @@ export default function Catalogo({ darkMode }) {
     }
 
     const nombreLimpio = nombreArchivo.replace(/^\/?(IMG\/)?/, '').trim().toLowerCase();
-
     return MAPA_IMAGENES[nombreLimpio] || null;
   }
 
-  // AGREGAR AL CARRITO DE COTIZACIÓN
   function agregarACotizacion(producto) {
     setCarrito((actual) => {
       const existe = actual.find((item) => item.product_id === producto.product_id);
@@ -144,10 +131,7 @@ export default function Catalogo({ darkMode }) {
     });
 
     setMensajeCotizacion(`¡"${producto.name}" se agregó a tu lista de cotización! 📋`);
-    
-    setTimeout(() => {
-      setMensajeCotizacion(null);
-    }, 3000);
+    setTimeout(() => setMensajeCotizacion(null), 3000);
   }
 
   function abrirFichaTecnica(producto) {
@@ -177,12 +161,8 @@ export default function Catalogo({ darkMode }) {
       <section id="inicio" className="hero">
         <div className="hero-content">
           <h1>Catálogo</h1>
-          <p>
-            En este espacio podrás visualizar nuestra maquinaria y herramientas disponibles.
-          </p>
-          <a href="#catalogo" className="btn">
-            Ver catálogo
-          </a>
+          <p>En este espacio podrás visualizar nuestra maquinaria y herramientas disponibles.</p>
+          <a href="#catalogo" className="btn">Ver catálogo</a>
         </div>
       </section>
 
@@ -237,9 +217,7 @@ export default function Catalogo({ darkMode }) {
               return (
                 <div key={item.product_id} className="card">
                   <div>
-                    {item.type && (
-                      <span className="categoria-tag">{item.type}</span>
-                    )}
+                    {item.type && <span className="categoria-tag">{item.type}</span>}
 
                     <div className="img-pro">
                       {srcImagen ? (
@@ -252,20 +230,13 @@ export default function Catalogo({ darkMode }) {
                     </div>
 
                     <h3 className="title">{item.name}</h3>
-
-                    <p className="text">
-                      {item.description || 'Sin descripción disponible.'}
-                    </p>
+                    <p className="text">{item.description || 'Sin descripción disponible.'}</p>
 
                     <div style={{ marginTop: '15px', fontSize: '14px' }}>
                       {item.model_number && (
-                        <p>
-                          <strong>Modelo:</strong> {item.model_number}
-                        </p>
+                        <p><strong>Modelo:</strong> {item.model_number}</p>
                       )}
-                      <p>
-                        <strong>Disponibles:</strong> {item.stock_quantity}
-                      </p>
+                      <p><strong>Disponibles:</strong> {item.stock_quantity}</p>
                     </div>
                   </div>
 
@@ -282,11 +253,7 @@ export default function Catalogo({ darkMode }) {
                     <button
                       type="button"
                       className="btn-pro"
-                      style={{
-                        flex: 1,
-                        margin: 0,
-                        backgroundColor: '#2e7d32'
-                      }}
+                      style={{ flex: 1, margin: 0, backgroundColor: '#2e7d32' }}
                       onClick={() => agregarACotizacion(item)}
                     >
                       + Cotizar 🛒
@@ -312,7 +279,7 @@ export default function Catalogo({ darkMode }) {
               <h3>📄 Ficha Técnica: {productoSeleccionado.name}</h3>
               <button className="btn-close-custom" onClick={() => setProductoSeleccionado(null)}>✕</button>
             </div>
-            
+
             <div className="modal-body-custom">
               <p><strong>Modelo:</strong> {productoSeleccionado.model_number || 'N/A'}</p>
               <p><strong>Categoría:</strong> {productoSeleccionado.type}</p>
@@ -322,10 +289,10 @@ export default function Catalogo({ darkMode }) {
 
             <div className="modal-footer-custom" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               {productoSeleccionado.pdf_url ? (
-                <a 
-                  href={productoSeleccionado.pdf_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <a
+                  href={productoSeleccionado.pdf_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="btn-pro"
                   style={{ textAlign: 'center', textDecoration: 'none', flex: 1 }}
                 >
@@ -336,10 +303,10 @@ export default function Catalogo({ darkMode }) {
                   Este equipo no cuenta con un PDF externo adjunto.
                 </p>
               )}
-              
-              <button 
-                type="button" 
-                className="btn-pro" 
+
+              <button
+                type="button"
+                className="btn-pro"
                 style={{ backgroundColor: '#d32f2f', flex: 1 }}
                 onClick={() => setProductoSeleccionado(null)}
               >
@@ -351,7 +318,7 @@ export default function Catalogo({ darkMode }) {
       )}
 
       {mensajeCotizacion && (
-        <div className="toast-notificacion">
+        <div className="toast-notificacion toast-success">
           <span>{mensajeCotizacion}</span>
         </div>
       )}

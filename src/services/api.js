@@ -1,182 +1,166 @@
-const API_URL = 'http://localhost:8000';
+// ==========================================
+// CONFIGURACIÓN DE LA API (Vite)
+// ==========================================
+// ✅ Vite lee las variables de entorno con import.meta.env
+//    y solo las que empiezan con VITE_.
+//    - .env       → VITE_API_URL=https://tu-dominio.com
+//    - .env.local → VITE_API_URL=http://localhost:8000
+
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+if (!API_URL && import.meta.env.DEV) {
+  console.info(
+    '[CE-Web] VITE_API_URL no está definida. ' +
+    'Crea un archivo .env.local en la raíz del proyecto.'
+  );
+}
 
 // ==========================================
 // FUNCIÓN GENERAL PARA PETICIONES
 // ==========================================
-
 async function request(endpoint, options = {}) {
-const response = await fetch(`${API_URL}${endpoint}`, {
-headers: {
-'Content-Type': 'application/json',
-...options.headers,
-},
-...options,
-});
+  try {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
 
-if (!response.ok) {
-let errorMessage = 'Error en la comunicación con el servidor';
+    if (!response.ok) {
+      let errorMessage = 'No fue posible completar la solicitud.';
 
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.detail || errorMessage;
+      } catch {
+        // Respuesta sin JSON
+      }
 
-try {
-  const errorData = await response.json();
-  errorMessage = errorData.detail || errorMessage;
-} catch {
-  // Si la respuesta no viene en JSON
-}
+      throw new Error(errorMessage);
+    }
 
-throw new Error(errorMessage);
+    if (response.status === 204) {
+      return null;
+    }
 
-
-}
-
-// Para respuestas sin contenido
-if (response.status === 204) {
-return null;
-}
-
-return response.json();
+    return response.json();
+  } catch (err) {
+    // ✅ Convertimos el error de red del navegador a un mensaje amigable
+    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+      throw new Error('No hay conexión con el servicio. Verifica tu red e intenta de nuevo.');
+    }
+    throw err;
+  }
 }
 
 // ==========================================
 // PRODUCTS
 // ==========================================
-
 export async function obtenerProductos() {
-return request('/products/');
+  return request('/products/');
 }
 
 export async function obtenerProducto(productId) {
-return request(`/products/${productId}`);
+  return request(`/products/${productId}`);
 }
 
 export async function crearProducto(datos) {
-return request('/products/', {
-method: 'POST',
-body: JSON.stringify(datos),
-});
+  return request('/products/', { method: 'POST', body: JSON.stringify(datos) });
 }
 
 export async function actualizarProducto(productId, datos) {
-return request(`/products/${productId}`, {
-method: 'PUT',
-body: JSON.stringify(datos),
-});
+  return request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(datos) });
 }
 
 export async function eliminarProducto(productId) {
-return request(`/products/${productId}`, {
-method: 'DELETE',
-});
+  return request(`/products/${productId}`, { method: 'DELETE' });
 }
 
 // ==========================================
 // INVENTORY
 // ==========================================
-
 export async function obtenerInventario() {
-return request('/inventory/');
+  return request('/inventory/');
 }
 
 export async function obtenerItemInventario(inventoryId) {
-return request(`/inventory/${inventoryId}`);
+  return request(`/inventory/${inventoryId}`);
 }
 
 export async function crearItemInventario(datos) {
-return request('/inventory/', {
-method: 'POST',
-body: JSON.stringify(datos),
-});
+  return request('/inventory/', { method: 'POST', body: JSON.stringify(datos) });
 }
 
 export async function actualizarItemInventario(inventoryId, datos) {
-return request(`/inventory/${inventoryId}`, {
-method: 'PUT',
-body: JSON.stringify(datos),
-});
+  return request(`/inventory/${inventoryId}`, { method: 'PUT', body: JSON.stringify(datos) });
 }
 
 export async function eliminarItemInventario(inventoryId) {
-return request(`/inventory/${inventoryId}`, {
-method: 'DELETE',
-});
+  return request(`/inventory/${inventoryId}`, { method: 'DELETE' });
 }
 
 // ==========================================
 // INVENTORY MOVEMENTS
 // ==========================================
-
 export async function obtenerMovimientos() {
-return request('/inventory-movements/');
+  return request('/inventory-movements/');
 }
 
 export async function crearMovimiento(datos) {
-return request('/inventory-movements/', {
-method: 'POST',
-body: JSON.stringify(datos),
-});
+  return request('/inventory-movements/', { method: 'POST', body: JSON.stringify(datos) });
 }
 
 // ==========================================
 // USERS
 // ==========================================
-
 export async function obtenerUsuarios() {
-return request('/users/');
+  return request('/users/');
 }
 
 export async function obtenerUsuario(userId) {
-return request(`/users/${userId}`);
+  return request(`/users/${userId}`);
+}
+
+export async function crearUsuario(datos) {
+  return request('/users/', { method: 'POST', body: JSON.stringify(datos) });
 }
 
 // ==========================================
 // COTIZACIONES
 // ==========================================
-
 export async function obtenerCotizaciones() {
-return request('/cotizaciones/');
+  return request('/cotizaciones/');
 }
 
 export async function obtenerCotizacion(cotizacionId) {
-return request(`/cotizaciones/${cotizacionId}`);
+  return request(`/cotizaciones/${cotizacionId}`);
 }
 
 export async function crearCotizacion(datos) {
-return request('/cotizaciones/', {
-method: 'POST',
-body: JSON.stringify(datos),
-});
+  return request('/cotizaciones/', { method: 'POST', body: JSON.stringify(datos) });
 }
 
 export async function actualizarCotizacion(cotizacionId, datos) {
-return request(`/cotizaciones/${cotizacionId}`, {
-method: 'PUT',
-body: JSON.stringify(datos),
-});
+  return request(`/cotizaciones/${cotizacionId}`, { method: 'PUT', body: JSON.stringify(datos) });
 }
 
 export async function eliminarCotizacion(cotizacionId) {
-return request(`/cotizaciones/${cotizacionId}`, {
-method: 'DELETE',
-});
+  return request(`/cotizaciones/${cotizacionId}`, { method: 'DELETE' });
 }
 
 // ==========================================
 // DETALLE COTIZACIONES
 // ==========================================
-
 export async function obtenerDetallesCotizacion() {
-return request('/detalle-cotizaciones/');
+  return request('/detalle-cotizaciones/');
 }
 
 export async function crearDetalleCotizacion(datos) {
-return request('/detalle-cotizaciones/', {
-method: 'POST',
-body: JSON.stringify(datos),
-});
+  return request('/detalle-cotizaciones/', { method: 'POST', body: JSON.stringify(datos) });
 }
 
 export async function eliminarDetalleCotizacion(detalleId) {
-return request(`/detalle-cotizaciones/${detalleId}`, {
-method: 'DELETE',
-});
+  return request(`/detalle-cotizaciones/${detalleId}`, { method: 'DELETE' });
 }

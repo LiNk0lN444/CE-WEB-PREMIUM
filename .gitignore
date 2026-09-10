@@ -3,3 +3,6 @@ node_modules
 __pycache__/
 *.pyc
 src.zip
+.env
+.env.local
+.env.*.local

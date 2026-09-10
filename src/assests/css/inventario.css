@@ -634,3 +634,44 @@
     width: 100%;
   }
 }
+/* ==========================================
+   MODAL DE CONFIRMACIÓN DE ELIMINACIÓN
+   ========================================== */
+.modal-confirmar {
+  max-width: 420px;
+}
+
+.modal-body-confirmar {
+  padding: 1.5rem 0;
+}
+
+.modal-body-confirmar p {
+  margin: 0 0 0.75rem 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.modal-body-confirmar strong {
+  color: #b21420;
+}
+
+.modal-advertencia {
+  font-size: 13px !important;
+  color: #888;
+  font-style: italic;
+}
+
+.btn-eliminar-confirmar {
+  background: #c62828;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-eliminar-confirmar:hover {
+  background: #8f0f19;
+}

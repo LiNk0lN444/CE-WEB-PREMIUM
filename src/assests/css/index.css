@@ -412,3 +412,31 @@
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* ==========================================
+   TOASTS GLOBALES
+   ========================================== */
+.toast-notificacion {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  padding: 14px 22px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #fff;
+  background: #2e7d32;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+  animation: slideInToast 0.35s ease-out;
+  max-width: 360px;
+  line-height: 1.4;
+}
+
+.toast-notificacion.toast-info  { background: #1976d2; }
+.toast-notificacion.toast-error { background: #c62828; }
+.toast-notificacion.toast-success { background: #2e7d32; }
+
+@keyframes slideInToast {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}

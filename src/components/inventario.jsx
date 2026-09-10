@@ -14,18 +14,14 @@ export default function Inventario({ darkMode }) {
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-
-  // ==========================================
-  // ESTADO DE BÚSQUEDA
-  // ==========================================
   const [busqueda, setBusqueda] = useState('');
 
-  // ==========================================
-  // ESTADOS DE LOS MODALES
-  // ==========================================
   const [modalEditar, setModalEditar] = useState(false);
   const [modalAgregar, setModalAgregar] = useState(false);
   const [registroEditando, setRegistroEditando] = useState(null);
+
+  // 🔥 NUEVO: Estado para el modal de confirmación de eliminación
+  const [itemAEliminar, setItemAEliminar] = useState(null);
 
   const [formulario, setFormulario] = useState({
     product_id: '',
@@ -35,9 +31,13 @@ export default function Inventario({ darkMode }) {
 
   const [guardando, setGuardando] = useState(false);
 
-  // ==========================================
-  // CARGAR INVENTARIO Y PRODUCTOS
-  // ==========================================
+  // 🔔 Toast local
+  const [toast, setToast] = useState(null);
+  const mostrarToast = (msg, tipo = 'success') => {
+    setToast({ msg, tipo });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   useEffect(() => {
     cargarDatos();
   }, []);
@@ -54,24 +54,17 @@ export default function Inventario({ darkMode }) {
 
       setInventario(datosInventario);
       setProductos(datosProductos);
-    } catch (error) {
-      console.error('Error cargando inventario:', error);
-      setError('No fue posible cargar la información del inventario.');
+    } catch {
+      setError('No fue posible cargar la información del inventario. Intenta nuevamente.');
     } finally {
       setCargando(false);
     }
   }
 
-  // ==========================================
-  // BUSCAR PRODUCTO POR ID
-  // ==========================================
   function buscarProducto(productId) {
     return productos.find((producto) => producto.product_id === productId);
   }
 
-  // ==========================================
-  // FILTRADO LOCAL (BÚSQUEDA)
-  // ==========================================
   const inventarioFiltrado = inventario.filter((item) => {
     const producto = buscarProducto(item.product_id);
     const termino = busqueda.toLowerCase();
@@ -83,21 +76,11 @@ export default function Inventario({ darkMode }) {
     return nombre.includes(termino) || tipo.includes(termino) || id.includes(termino);
   });
 
-  // ==========================================
-  // ABRIR MODAL AGREGAR
-  // ==========================================
   function abrirModalAgregar() {
-    setFormulario({
-      product_id: '',
-      quantity: '',
-      initial_price: ''
-    });
+    setFormulario({ product_id: '', quantity: '', initial_price: '' });
     setModalAgregar(true);
   }
 
-  // ==========================================
-  // CREAR NUEVO REGISTRO
-  // ==========================================
   async function manejarCrearRegistro(event) {
     event.preventDefault();
 
@@ -114,40 +97,38 @@ export default function Inventario({ darkMode }) {
 
       setInventario((actual) => [...actual, respuesta]);
       setModalAgregar(false);
-      alert('Registro agregado correctamente.');
-    } catch (error) {
-      console.error('Error agregando registro:', error);
-      alert(`No fue posible agregar el registro: ${error.message}`);
+      mostrarToast('Registro agregado correctamente. ✅');
+    } catch {
+      mostrarToast('No fue posible agregar el registro. Intenta nuevamente.', 'error');
     } finally {
       setGuardando(false);
     }
   }
 
-  // ==========================================
-  // ELIMINAR REGISTRO
-  // ==========================================
-  async function manejarEliminar(inventoryId, nombreProducto) {
-    const confirmar = window.confirm(
-      `¿Estás segura de que deseas eliminar "${nombreProducto}" del inventario?`
-    );
+  // 🔥 CAMBIO: Abre el modal personalizado en lugar de window.confirm
+  function solicitarEliminar(item, nombreProducto) {
+    setItemAEliminar({ item, nombreProducto });
+  }
 
-    if (!confirmar) return;
+  // 🔥 CAMBIO: Ejecuta la eliminación real
+  async function confirmarEliminar() {
+    if (!itemAEliminar) return;
+
+    const { item } = itemAEliminar;
 
     try {
-      await eliminarItemInventario(inventoryId);
+      await eliminarItemInventario(item.inventory_id);
       setInventario((inventarioActual) =>
-        inventarioActual.filter((item) => item.inventory_id !== inventoryId)
+        inventarioActual.filter((i) => i.inventory_id !== item.inventory_id)
       );
-      alert('Registro eliminado correctamente.');
-    } catch (error) {
-      console.error('Error eliminando registro:', error);
-      alert(`No fue posible eliminar el registro: ${error.message}`);
+      mostrarToast('Registro eliminado correctamente. 🗑️');
+    } catch {
+      mostrarToast('No fue posible eliminar el registro. Intenta nuevamente.', 'error');
+    } finally {
+      setItemAEliminar(null);
     }
   }
 
-  // ==========================================
-  // ABRIR MODAL DE EDICIÓN
-  // ==========================================
   function manejarEditar(item) {
     setRegistroEditando(item);
     setFormulario({
@@ -158,9 +139,6 @@ export default function Inventario({ darkMode }) {
     setModalEditar(true);
   }
 
-  // ==========================================
-  // CAMBIAR VALORES DEL FORMULARIO
-  // ==========================================
   function manejarCambio(event) {
     const { name, value } = event.target;
     setFormulario((datosActuales) => ({
@@ -169,12 +147,8 @@ export default function Inventario({ darkMode }) {
     }));
   }
 
-  // ==========================================
-  // GUARDAR CAMBIOS DE EDICIÓN
-  // ==========================================
   async function manejarGuardarCambios(event) {
     event.preventDefault();
-
     if (!registroEditando) return;
 
     try {
@@ -199,18 +173,14 @@ export default function Inventario({ darkMode }) {
 
       setModalEditar(false);
       setRegistroEditando(null);
-      alert('Registro actualizado correctamente.');
-    } catch (error) {
-      console.error('Error actualizando registro:', error);
-      alert(`No fue posible actualizar el registro: ${error.message}`);
+      mostrarToast('Registro actualizado correctamente. ✅');
+    } catch {
+      mostrarToast('No fue posible actualizar el registro. Intenta nuevamente.', 'error');
     } finally {
       setGuardando(false);
     }
   }
 
-  // ==========================================
-  // CERRAR MODALES
-  // ==========================================
   function cerrarModales() {
     if (guardando) return;
     setModalEditar(false);
@@ -220,24 +190,17 @@ export default function Inventario({ darkMode }) {
 
   return (
     <div className={`inventario-container ${darkMode ? 'theme-dark' : 'theme-light'}`}>
-      
-      {/* ENCABEZADO */}
       <div className="inventario-encabezado">
         <div>
           <h2>Gestión de Inventario</h2>
           <p>Administra y controla los productos registrados en el sistema.</p>
         </div>
 
-        <button
-          type="button"
-          className="btn-agregar"
-          onClick={abrirModalAgregar}
-        >
+        <button type="button" className="btn-agregar" onClick={abrirModalAgregar}>
           + Agregar registro
         </button>
       </div>
 
-      {/* BARRA DE BÚSQUEDA */}
       <div className="inventario-barras">
         <div className="campo-busqueda">
           <input
@@ -249,10 +212,8 @@ export default function Inventario({ darkMode }) {
         </div>
       </div>
 
-      {/* CARGANDO */}
       {cargando && <div className="inventario-mensaje">Cargando información...</div>}
 
-      {/* ERROR */}
       {error && (
         <div className="inventario-error">
           <p>{error}</p>
@@ -262,7 +223,6 @@ export default function Inventario({ darkMode }) {
         </div>
       )}
 
-      {/* TABLA */}
       {!cargando && !error && (
         <div className="tabla-responsive">
           <table className="tabla-inventario">
@@ -330,8 +290,8 @@ export default function Inventario({ darkMode }) {
                             className="btn-eliminar"
                             title="Eliminar registro"
                             onClick={() =>
-                              manejarEliminar(
-                                item.inventory_id,
+                              solicitarEliminar(
+                                item,
                                 producto?.name || `Producto ${item.product_id}`
                               )
                             }
@@ -371,11 +331,7 @@ export default function Inventario({ darkMode }) {
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="btn-cerrar-modal"
-                onClick={cerrarModales}
-              >
+              <button type="button" className="btn-cerrar-modal" onClick={cerrarModales}>
                 ×
               </button>
             </div>
@@ -444,6 +400,60 @@ export default function Inventario({ darkMode }) {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* =====================================
+          🔥 MODAL DE CONFIRMACIÓN DE ELIMINACIÓN
+      ====================================== */}
+      {itemAEliminar && (
+        <div
+          className="modal-overlay"
+          onClick={() => setItemAEliminar(null)}
+        >
+          <div
+            className="modal-editar modal-confirmar"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h3>🗑️ Confirmar eliminación</h3>
+              </div>
+            </div>
+
+            <div className="modal-body-confirmar">
+              <p>
+                ¿Estás segura de que deseas eliminar{' '}
+                <strong>"{itemAEliminar.nombreProducto}"</strong> del inventario?
+              </p>
+              <p className="modal-advertencia">
+                Esta acción no se puede deshacer.
+              </p>
+            </div>
+
+            <div className="modal-acciones">
+              <button
+                type="button"
+                className="btn-cancelar"
+                onClick={() => setItemAEliminar(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn-eliminar-confirmar"
+                onClick={confirmarEliminar}
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className={`toast-notificacion toast-${toast.tipo}`}>
+          {toast.msg}
         </div>
       )}
     </div>
