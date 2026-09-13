@@ -1,31 +1,34 @@
-# FAST-API/migrar_passwords.py
+# migrar_passwords.py
 from config.database import SessionLocal
 from model import models
 from model.security import hash_password
 
 db = SessionLocal()
 
-# 👇 Ajusta con las contraseñas reales (las que estaban en texto plano)
-usuarios_a_migrar = [
-    ("david.perez@example.com", "hashed_pass_123"),
-    ("ana.gomez@example.com",  "hashed_pass_456"),
-    ("lau@gmail.com",          "1234"),   # 👈 la que le pusiste a Laura
-]
+print("🔐 Migrando contraseñas de texto plano a bcrypt...\n")
 
-for email, password_plano in usuarios_a_migrar:
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        print(f"❌ {email} no encontrado")
-        continue
+usuarios = db.query(models.User).all()
+migrados = 0
+saltados = 0
 
-    # Si ya está hasheado, saltar
+for user in usuarios:
+    # Si ya está hasheado (empieza con $2b$), saltar
     if user.password.startswith("$2b$"):
-        print(f"⏭️  {email} ya estaba hasheado")
+        print(f"⏭️  Ya hasheado: {user.email}")
+        saltados += 1
         continue
 
-    user.password = hash_password(password_plano)
-    print(f"✅ {email} migrado")
+    # Hashear la contraseña actual (tal cual está en texto plano)
+    password_original = user.password
+    user.password = hash_password(password_original)
+
+    print(f"✅ Migrado: {user.email}  →  (contraseña actual: '{password_original}')")
+    migrados += 1
 
 db.commit()
 db.close()
-print("\n🎉 Migración completada")
+
+print(f"\n{'='*50}")
+print(f"📊 Migrados: {migrados} | Saltados: {saltados}")
+print(f"{'='*50}")
+print("🎉 Ahora todos pueden loguearse con la MISMA contraseña que ya tenían.")

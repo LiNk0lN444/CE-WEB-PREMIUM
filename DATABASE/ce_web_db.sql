@@ -353,5 +353,11 @@ IF TG_TABLE_NAME = 'users' AND OLD.role IS DISTINCT FROM NEW.role THEN
         ' | Cambio de rol: ' || OLD.role || ' → ' || NEW.role;
 END IF;
 UPDATE Users
-SET role = 'admin'
+SET role = 'admin'kh
 WHERE email = 'david.perez@example.com';
+
+UPDATE Users
+SET role = 'admin'kh
+WHERE email = 'castroesquivellincolneduardo@gmail.com';
+
+

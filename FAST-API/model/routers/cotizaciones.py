@@ -45,18 +45,19 @@ def crear_cotizacion(
     # Número de cotización basado en el ID generado por PostgreSQL
     numero_cotizacion = f"COT-{nueva.cotizacion_id}"
 
-    # Crear contenido del correo
-    cuerpo = cuerpo_confirmacion_cotizacion(
+    # 🌟 CORRECCIÓN: Recibir tanto el asunto como el HTML de forma separada
+    # y pasarle el valor numérico limpio (`nueva.total_price`)
+    asunto_correo, cuerpo_html = cuerpo_confirmacion_cotizacion(
         usuario.username,
         numero_cotizacion,
-        f"{nueva.total_price:,.0f}"
+        nueva.total_price
     )
 
-    # Enviar correo de confirmación
+    # Enviar correo utilizando el asunto y el cuerpo que determinó el umbral de seguridad
     enviar_correo(
         usuario.email,
-        f"Confirmación de cotización {numero_cotizacion}",
-        cuerpo
+        asunto_correo,
+        cuerpo_html
     )
 
     return nueva

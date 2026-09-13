@@ -24,9 +24,10 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
   const [cantidadInput, setCantidadInput] = useState(1);
   const [mesesInput, setMesesInput] = useState(1);
 
-  // Observaciones y Mensajes de error
+  // Observaciones, Mensajes de error y Notificación flotante (Toast)
   const [observaciones, setObservaciones] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [mensajeCotizacion, setMensajeCotizacion] = useState(null);
 
   // Historial de cotizaciones
   const [historialCotizaciones, setHistorialCotizaciones] = useState(() => {
@@ -106,83 +107,85 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
 
   // GUARDAR COTIZACIÓN CON CONTROL DE SESIÓN
   const handleGuardarCotizacion = async () => {
-  setErrorMsg('');
+    setErrorMsg('');
 
-  if (carrito.length === 0) {
-    setErrorMsg('Debes agregar al menos un ítem a la cotización.');
-    return;
-  }
-
-  // Verificar sesión
-  if (!usuarioSesion) {
-    alert('Para guardar y procesar tu cotización debes iniciar sesión o registrarte.');
-
-    if (onNavigateLogin) {
-      onNavigateLogin();
+    if (carrito.length === 0) {
+      setErrorMsg('Debes agregar al menos un ítem a la cotización.');
+      return;
     }
 
-    return;
-  }
+    // Verificar sesión
+    if (!usuarioSesion) {
+      alert('Para guardar y procesar tu cotización debes iniciar sesión o registrarte.');
 
-  // Verificar que tengamos el ID del usuario
-  if (!usuarioSesion.user_id) {
-    setErrorMsg('No se pudo identificar el usuario. Inicia sesión nuevamente.');
-    return;
-  }
+      if (onNavigateLogin) {
+        onNavigateLogin();
+      }
 
-  try {
-    // Enviar cotización al backend
-    const cotizacionGuardada = await crearCotizacion({
-      user_id: usuarioSesion.user_id,
-      iva: iva,
-      total_price: total,
-      status: 'pending',
-      observations: observaciones
-    });
+      return;
+    }
 
-    // Crear información para mostrar en el historial
-    const nuevaCotizacion = {
-      numero: `COT-${cotizacionGuardada.cotizacion_id}`,
-      fecha: new Date().toLocaleDateString('es-CO'),
-      cliente: {
-        nombre: usuarioSesion.username || usuarioSesion.nombre || 'Usuario Registrado',
-        correo: usuarioSesion.email || usuarioSesion.correo || 'correo@registrado.com',
-        telefono: usuarioSesion.phone_number || usuarioSesion.telefono || 'No registrado'
-      },
-      items: [...carrito],
-      subtotal,
-      iva,
-      total,
-      observaciones,
-      estado: 'enviada'
-    };
+    // Verificar que tengamos el ID del usuario
+    if (!usuarioSesion.user_id) {
+      setErrorMsg('No se pudo identificar el usuario. Inicia sesión nuevamente.');
+      return;
+    }
 
-    // Guardar también en el historial visual
-    setHistorialCotizaciones([
-      nuevaCotizacion,
-      ...historialCotizaciones
-    ]);
+    try {
+      // Enviar cotización al backend
+      const cotizacionGuardada = await crearCotizacion({
+        user_id: usuarioSesion.user_id,
+        iva: iva,
+        total_price: total,
+        status: 'pending',
+        observations: observaciones
+      });
 
-    // Limpiar carrito
-    handleLimpiarTodo();
+      // Crear información para mostrar en el historial
+      const nuevaCotizacion = {
+        numero: `COT-${cotizacionGuardada.cotizacion_id}`,
+        fecha: new Date().toLocaleDateString('es-CO'),
+        cliente: {
+          nombre: usuarioSesion.username || usuarioSesion.nombre || 'Usuario Registrado',
+          correo: usuarioSesion.email || usuarioSesion.correo || 'correo@registrado.com',
+          telefono: usuarioSesion.phone_number || usuarioSesion.telefono || 'No registrado'
+        },
+        items: [...carrito],
+        subtotal,
+        iva,
+        total,
+        observaciones,
+        estado: 'enviada'
+      };
 
-    // Mostrar listado
-    setTabActiva('listado');
+      // Guardar también en el historial visual
+      setHistorialCotizaciones([
+        nuevaCotizacion,
+        ...historialCotizaciones
+      ]);
 
-    alert(
-      `¡Cotización ${nuevaCotizacion.numero} generada con éxito! 🎉\n\n` +
-      `Se ha enviado una confirmación al correo ${usuarioSesion.email}.`
-    );
+      // Limpiar carrito
+      handleLimpiarTodo();
 
-  } catch (error) {
-    console.error('Error creando cotización:', error);
+      // Mostrar listado
+      setTabActiva('listado');
 
-    setErrorMsg(
-      error.message ||
-      'No fue posible generar la cotización. Verifica que FastAPI esté ejecutándose.'
-    );
-  }
-};
+      // 🌟 REEMPLAZO DE ALERT POR TOAST FLOTANTE MODERNO
+      setMensajeCotizacion(`¡Cotización ${nuevaCotizacion.numero} generada con éxito! 🎉 Se ha enviado una confirmación al correo ${usuarioSesion.email || usuarioSesion.correo}.`);
+
+      setTimeout(() => {
+        setMensajeCotizacion(null);
+      }, 4000);
+
+    } catch (error) {
+      console.error('Error creando cotización:', error);
+
+      setErrorMsg(
+        error.message ||
+        'No fue posible generar la cotización. Verifica que FastAPI esté ejecutándose.'
+      );
+    }
+  };
 
   const handleLimpiarTodo = () => {
     setCarrito([]);
@@ -225,7 +228,7 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                 <h2>Información de Cuenta</h2>
                 {usuarioSesion ? (
                   <p style={{ color: '#2e7d32', fontWeight: 'bold' }}>
-                    Sesión activa: {usuarioSesion.nombre || usuarioSesion.email}
+                    Sesión activa: {usuarioSesion.nombre || usuarioSesion.email || usuarioSesion.username}
                   </p>
                 ) : (
                   <p style={{ color: '#d32f2f', fontWeight: 'bold' }}>
@@ -442,6 +445,13 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
 
         </div>
       </main>
+
+      {/* 🌟 NOTIFICACIÓN FLOTANTE (TOAST) DE COTIZACIÓN */}
+      {mensajeCotizacion && (
+        <div className="toast-notificacion">
+          <span>{mensajeCotizacion}</span>
+        </div>
+      )}
     </div>
   );
 }
