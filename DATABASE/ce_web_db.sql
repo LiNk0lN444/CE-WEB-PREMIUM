@@ -48,6 +48,8 @@ ON inventory
 FOR EACH ROW
 EXECUTE FUNCTION log_audit_trigger_func();
 
+
+
 -- TABLA DE MOVIMIENTOS DE INVENTARIO
 CREATE TABLE inventory_movement (
     movement_id SERIAL PRIMARY KEY,
@@ -348,16 +350,13 @@ VALUES
 ALTER TABLE Users
 ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'client'
 CHECK (role IN ('client', 'admin'));
-IF TG_TABLE_NAME = 'users' AND OLD.role IS DISTINCT FROM NEW.role THEN
-    v_description := v_description || 
-        ' | Cambio de rol: ' || OLD.role || ' → ' || NEW.role;
-END IF;
+
 UPDATE Users
-SET role = 'admin'kh
+SET role = 'admin'
 WHERE email = 'david.perez@example.com';
 
 UPDATE Users
-SET role = 'admin'kh
+SET role = 'admin'
 WHERE email = 'castroesquivellincolneduardo@gmail.com';
 
 --actualizacion para notificar al admin reservas de maquinaria proximas a vencer
@@ -434,16 +433,24 @@ INNER JOIN cotizaciones c ON c.cotizacion_id = dc.cotizacion_id
 WHERE c.status IN ('approved', 'active')
 GROUP BY dc.product_id, c.start_date, c.end_date;
 --vista de reservas proximas a vencer
-CREATE OR REPLACE VIEW v_stock_bloqueado AS
+CREATE OR REPLACE VIEW v_reservas_por_vencer AS
 SELECT
-    dc.product_id,
+    c.cotizacion_id,
+    c.user_id,
+    u.username,
+    u.email AS cliente_email,
     c.start_date,
     c.end_date,
-    SUM(dc.quantity) AS cantidad_bloqueada
-FROM detalle_cotizaciones dc
-INNER JOIN cotizaciones c ON c.cotizacion_id = dc.cotizacion_id
+    c.total_price,
+    c.status,
+    (c.end_date - CURRENT_DATE) AS dias_restantes,
+    c.notificado_vencimiento,
+    c.fecha_notificacion
+FROM cotizaciones c
+INNER JOIN Users u ON u.user_id = c.user_id
 WHERE c.status IN ('approved', 'active')
-GROUP BY dc.product_id, c.start_date, c.end_date;
+  AND c.end_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '3 days')
+ORDER BY c.end_date ASC;
 --funciones--
 -- ============================================================
 -- FUNCIÓN: fn_stock_disponible
@@ -665,6 +672,10 @@ $$;
 --   p_admin_id      → ID del admin que aprueba
 -- RETORNA: TEXT (mensaje de éxito o error)
 -- ============================================================
+-- ============================================================
+-- FUNCIÓN: fn_aprobar_reserva
+-- PROPÓSITO: Aprobar reserva. Solo admins. DESCUENTA STOCK.
+-- ============================================================
 CREATE OR REPLACE FUNCTION fn_aprobar_reserva(
     p_cotizacion_id INT,
     p_admin_id INT
@@ -673,37 +684,25 @@ RETURNS TEXT
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_status VARCHAR;              -- Estado actual de la reserva
-    v_admin_role VARCHAR;          -- Rol del usuario que aprueba
-    v_item RECORD;                 -- Variable para iterar los ítems
-    v_disponible INT;              -- Stock disponible actual
+    v_status VARCHAR;
+    v_admin_role VARCHAR;
+    v_item RECORD;
+    v_disponible INT;
 BEGIN
-    -- ─────────────────────────────────────────────
-    -- VALIDACIÓN 1: El usuario debe ser admin
-    -- ─────────────────────────────────────────────
     SELECT role INTO v_admin_role FROM Users WHERE user_id = p_admin_id;
-
     IF v_admin_role IS NULL OR v_admin_role != 'admin' THEN
         RETURN 'Solo un administrador puede aprobar reservas';
     END IF;
 
-    -- ─────────────────────────────────────────────
-    -- VALIDACIÓN 2: La reserva debe existir y estar pendiente
-    -- ─────────────────────────────────────────────
     SELECT status INTO v_status FROM cotizaciones WHERE cotizacion_id = p_cotizacion_id;
-
     IF v_status IS NULL THEN
         RETURN 'Reserva no encontrada';
     END IF;
-
     IF v_status != 'pending' THEN
         RETURN 'Solo se pueden aprobar reservas pendientes';
     END IF;
 
-    -- ─────────────────────────────────────────────
-    -- PASO 1: RE-VALIDAR stock de cada ítem
-    -- (Por si otro admin aprobó algo que ya bloquea el stock)
-    -- ─────────────────────────────────────────────
+    -- Re-validar disponibilidad
     FOR v_item IN
         SELECT dc.product_id, dc.quantity, c.start_date, c.end_date
         FROM detalle_cotizaciones dc
@@ -715,25 +714,26 @@ BEGIN
             v_item.start_date,
             v_item.end_date
         );
-
         IF v_disponible < v_item.quantity THEN
             RETURN 'No se puede aprobar: stock insuficiente para el producto ' || v_item.product_id;
         END IF;
     END LOOP;
 
-    -- ─────────────────────────────────────────────
-    -- PASO 2: Actualizar estado a 'approved'
-    -- ─────────────────────────────────────────────
+    -- 🔥 DESCONTAR STOCK
+    UPDATE Products p
+    SET stock_quantity = p.stock_quantity - dc.quantity
+    FROM detalle_cotizaciones dc
+    WHERE dc.cotizacion_id = p_cotizacion_id
+      AND p.product_id = dc.product_id;
+
+    -- Marcar como aprobada
     UPDATE cotizaciones
-    SET status = 'approved',                    -- Nuevo estado
-        approved_by = p_admin_id,               -- Quién aprobó
-        approved_at = CURRENT_TIMESTAMP         -- Cuándo aprobó
+    SET status = 'approved',
+        approved_by = p_admin_id,
+        approved_at = CURRENT_TIMESTAMP
     WHERE cotizacion_id = p_cotizacion_id;
 
-    -- ─────────────────────────────────────────────
-    -- PASO 3: Devolver éxito
-    -- ─────────────────────────────────────────────
-    RETURN 'Reserva aprobada. Stock bloqueado.';
+    RETURN 'Reserva aprobada. Stock descontado.';
 END;
 $$;
 -- ============================================================
@@ -852,11 +852,8 @@ END;
 $$;
 -- ============================================================
 -- FUNCIÓN: fn_actualizar_estados_reservas
--- PROPÓSITO: Actualizar automáticamente el estado de las
---            reservas según las fechas actuales:
---              approved → active   (cuando llega start_date)
---              active   → completed (cuando pasa end_date)
--- RETORNA: Tabla con cantidad de filas actualizadas y detalle
+-- PROPÓSITO: approved→active, active→completed.
+--            AL COMPLETAR DEVUELVE EL STOCK.
 -- ============================================================
 CREATE OR REPLACE FUNCTION fn_actualizar_estados_reservas()
 RETURNS TABLE (
@@ -866,229 +863,115 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_count INT := 0;               -- Contador de filas actualizadas
+    v_count INT := 0;
+    v_item RECORD;
+    v_reserva RECORD;
 BEGIN
-    -- ─────────────────────────────────────────────
-    -- CAMBIO 1: approved → active
-    -- (cuando la fecha de hoy está dentro del rango)
-    -- ─────────────────────────────────────────────
+    -- approved → active
     UPDATE cotizaciones
     SET status = 'active'
     WHERE status = 'approved'
-      AND start_date <= CURRENT_DATE          -- Ya empezó
-      AND end_date >= CURRENT_DATE;           -- Y aún no termina
-
-    GET DIAGNOSTICS v_count = ROW_COUNT;      -- Cuántas filas se actualizaron
-    IF v_count > 0 THEN
-        RETURN QUERY SELECT v_count, ('Activadas: ' || v_count)::TEXT;
-    END IF;
-
-    -- ─────────────────────────────────────────────
-    -- CAMBIO 2: active → completed
-    -- (cuando ya pasó la fecha de fin)
-    -- ─────────────────────────────────────────────
-    UPDATE cotizaciones
-    SET status = 'completed'
-    WHERE status = 'active'
-      AND end_date < CURRENT_DATE;            -- Ya terminó
+      AND start_date <= CURRENT_DATE
+      AND end_date >= CURRENT_DATE;
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
-    IF v_count > 0 THEN
-        RETURN QUERY SELECT v_count, ('Completadas: ' || v_count)::TEXT;
-    END IF;
 
-    -- ─────────────────────────────────────────────
-    -- Si no hubo cambios, informarlo
-    -- ─────────────────────────────────────────────
-    IF v_count = 0 THEN
+    -- active → completed + devolver stock
+    FOR v_reserva IN
+        SELECT cotizacion_id
+        FROM cotizaciones
+        WHERE status = 'active'
+          AND end_date < CURRENT_DATE
+    LOOP
+        FOR v_item IN
+            SELECT dc.product_id, dc.quantity
+            FROM detalle_cotizaciones dc
+            WHERE dc.cotizacion_id = v_reserva.cotizacion_id
+        LOOP
+            UPDATE Products
+            SET stock_quantity = stock_quantity + v_item.quantity
+            WHERE product_id = v_item.product_id;
+        END LOOP;
+
+        UPDATE cotizaciones
+        SET status = 'completed'
+        WHERE cotizacion_id = v_reserva.cotizacion_id;
+    END LOOP;
+
+    IF v_count > 0 THEN
+        RETURN QUERY SELECT v_count, ('Activadas: ' || v_count)::TEXT;
+    ELSE
         RETURN QUERY SELECT 0, 'Sin cambios'::TEXT;
     END IF;
 END;
 $$;
 -- ============================================================
--- ARREGLAR TIPOS DE DATOS EN cotizaciones
+-- SINCRONIZACIÓN: inventory.quantity → Products.stock_quantity
 -- ============================================================
--- iva: de NUMERIC(5,2) → NUMERIC(12,2)
---      Ahora soporta hasta 9,999,999,999.99
-ALTER TABLE cotizaciones
-ALTER COLUMN iva TYPE NUMERIC(12, 2);
-
--- total_price: de NUMERIC(10,2) → NUMERIC(14,2)
---      Por si el total se hace grande con varios productos
-ALTER TABLE cotizaciones
-ALTER COLUMN total_price TYPE NUMERIC(14, 2);
--- Agregar columna de precio de alquiler mensual
-ALTER TABLE Products
-ADD COLUMN IF NOT EXISTS monthly_price NUMERIC(14, 2);
-
--- Actualizar con precios razonables para pruebas
-UPDATE Products SET monthly_price = 2500000 WHERE product_id = 1;  -- Cargador
-UPDATE Products SET monthly_price = 150000  WHERE product_id = 2;  -- Pulidora
-UPDATE Products SET monthly_price = 3800000 WHERE product_id = 3;  -- Excavadora
-UPDATE Products SET monthly_price = 180000  WHERE product_id = 4;  -- Rotomartillo
-
--- Verificar
-SELECT product_id, name, monthly_price FROM Products;
--- Eliminar la versión anterior
-DROP FUNCTION IF EXISTS fn_crear_reserva(INT, DATE, DATE, TEXT, JSONB);
-
--- ============================================================
--- FUNCIÓN: fn_crear_reserva (versión por meses)
--- PROPÓSITO: Crear una reserva con duración en MESES. El precio
---            se obtiene automáticamente de Products.monthly_price.
--- PARÁMETROS:
---   p_user_id        → cliente que reserva
---   p_start_date     → fecha de inicio
---   p_months         → cantidad de meses (mínimo 1)
---   p_observaciones  → notas opcionales
---   p_items          → JSON [{product_id, quantity}]
--- RETORNA: (cotizacion_id, total, mensaje)
--- ============================================================
-CREATE OR REPLACE FUNCTION fn_crear_reserva(
-    p_user_id INT,
-    p_start_date DATE,
-    p_months INT,
-    p_observaciones TEXT,
-    p_items JSONB
-)
-RETURNS TABLE (
-    cotizacion_id INT,
-    total NUMERIC,
-    mensaje TEXT
-)
+CREATE OR REPLACE FUNCTION sync_stock_from_inventory_func()
+RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
-DECLARE
-    v_cotizacion_id INT;
-    v_item JSONB;
-    v_subtotal NUMERIC := 0;
-    v_iva NUMERIC;
-    v_total NUMERIC;
-    v_precio_mensual NUMERIC;
-    v_cantidad INT;
-    v_product_id INT;
-    v_disponible INT;
-    v_end_date DATE;
-    v_dias_restantes INT;
 BEGIN
-    -- ─────────────────────────────────────────────
-    -- VALIDACIÓN 1: Meses mínimo 1
-    -- ─────────────────────────────────────────────
-    IF p_months IS NULL OR p_months < 1 THEN
-        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
-            'La reserva mínima es de 1 mes'::TEXT;
-        RETURN;
+    IF TG_OP = 'INSERT' THEN
+        UPDATE Products
+        SET stock_quantity = stock_quantity + NEW.quantity
+        WHERE product_id = NEW.product_id;
+        RETURN NEW;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+        UPDATE Products
+        SET stock_quantity = stock_quantity + (NEW.quantity - OLD.quantity)
+        WHERE product_id = NEW.product_id;
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        UPDATE Products
+        SET stock_quantity = stock_quantity - OLD.quantity
+        WHERE product_id = OLD.product_id;
+        RETURN OLD;
     END IF;
 
-    -- ─────────────────────────────────────────────
-    -- VALIDACIÓN 2: Fecha obligatoria y no pasada
-    -- ─────────────────────────────────────────────
-    IF p_start_date IS NULL THEN
-        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
-            'Debes elegir una fecha de inicio'::TEXT;
-        RETURN;
-    END IF;
-
-    IF p_start_date < CURRENT_DATE THEN
-        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
-            'No puedes reservar en fechas pasadas'::TEXT;
-        RETURN;
-    END IF;
-
-    -- ─────────────────────────────────────────────
-    -- VALIDACIÓN 3: Usuario existe
-    -- ─────────────────────────────────────────────
-    IF NOT EXISTS (SELECT 1 FROM Users WHERE user_id = p_user_id) THEN
-        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
-            'Usuario no encontrado'::TEXT;
-        RETURN;
-    END IF;
-
-    -- ─────────────────────────────────────────────
-    -- PASO 1: Calcular end_date = start_date + N meses
-    -- ─────────────────────────────────────────────
-    v_end_date := p_start_date + (p_months || ' months')::INTERVAL;
-
-    -- ─────────────────────────────────────────────
-    -- PASO 2: Validar disponibilidad y sumar subtotal
-    -- ─────────────────────────────────────────────
-    FOR v_item IN SELECT jsonb_array_elements(p_items) LOOP
-        v_product_id := (v_item->>'product_id')::INT;
-        v_cantidad := (v_item->>'quantity')::INT;
-
-        -- Validar producto y obtener su precio mensual
-        SELECT monthly_price INTO v_precio_mensual
-        FROM Products WHERE product_id = v_product_id;
-
-        IF v_precio_mensual IS NULL THEN
-            RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
-                ('Producto ' || v_product_id || ' no encontrado')::TEXT;
-            RETURN;
-        END IF;
-
-        -- Validar stock en el rango
-        v_disponible := fn_stock_disponible(v_product_id, p_start_date, v_end_date);
-
-        IF v_disponible < v_cantidad THEN
-            RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
-                ('Stock insuficiente para el producto ' || v_product_id ||
-                 ' (disponible: ' || v_disponible || ')')::TEXT;
-            RETURN;
-        END IF;
-
-        -- subtotal += precio_mensual × meses × cantidad
-        v_subtotal := v_subtotal + (v_precio_mensual * p_months * v_cantidad);
-    END LOOP;
-
-    -- ─────────────────────────────────────────────
-    -- PASO 3: Calcular IVA y total
-    -- ─────────────────────────────────────────────
-    v_iva := v_subtotal * 0.19;
-    v_total := v_subtotal + v_iva;
-
-    -- ─────────────────────────────────────────────
-    -- PASO 4: Insertar cotización
-    -- ─────────────────────────────────────────────
-    INSERT INTO cotizaciones (
-        user_id, iva, total_price, status,
-        observations, start_date, end_date
-    )
-    VALUES (
-        p_user_id, v_iva, v_total, 'pending',
-        p_observaciones, p_start_date, v_end_date
-    )
-    RETURNING cotizaciones.cotizacion_id INTO v_cotizacion_id;
-
-    -- ─────────────────────────────────────────────
-    -- PASO 5: Insertar detalle
-    -- ─────────────────────────────────────────────
-    FOR v_item IN SELECT jsonb_array_elements(p_items) LOOP
-        v_product_id := (v_item->>'product_id')::INT;
-        v_cantidad := (v_item->>'quantity')::INT;
-
-        SELECT monthly_price INTO v_precio_mensual
-        FROM Products WHERE product_id = v_product_id;
-
-        INSERT INTO detalle_cotizaciones (cotizacion_id, product_id, quantity, price)
-        VALUES (
-            v_cotizacion_id,
-            v_product_id,
-            v_cantidad,
-            v_precio_mensual * p_months       -- precio total del ítem por los meses
-        );
-    END LOOP;
-
-    -- ─────────────────────────────────────────────
-    -- PASO 6: Éxito
-    -- ─────────────────────────────────────────────
-    RETURN QUERY SELECT v_cotizacion_id, v_total,
-        ('Reserva creada por ' || p_months || ' mes(es). Espera aprobación.')::TEXT;
-
-EXCEPTION
-    WHEN OTHERS THEN
-        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC, SQLERRM::TEXT;
+    RETURN NULL;
 END;
 $$;
+
+DROP TRIGGER IF EXISTS trg_sync_stock_inventory ON inventory;
+
+CREATE TRIGGER trg_sync_stock_inventory
+AFTER INSERT OR UPDATE OR DELETE
+ON inventory
+FOR EACH ROW
+EXECUTE FUNCTION sync_stock_from_inventory_func();
+
+-- Sincronizar datos actuales
+UPDATE Products p
+SET stock_quantity = COALESCE(
+    (SELECT i.quantity FROM inventory i WHERE i.product_id = p.product_id),
+    0
+);
+
+-- Arreglar tipos numéricos (solo si aún son pequeños)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'cotizaciones'
+          AND column_name = 'iva'
+          AND numeric_precision = 5
+    ) THEN
+        ALTER TABLE cotizaciones ALTER COLUMN iva TYPE NUMERIC(12, 2);
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'cotizaciones'
+          AND column_name = 'total_price'
+          AND numeric_precision = 10
+    ) THEN
+        ALTER TABLE cotizaciones ALTER COLUMN total_price TYPE NUMERIC(14, 2);
+    END IF;
+END $$;
 
 -- Permisos (si usas ce_app)
 DO $$
