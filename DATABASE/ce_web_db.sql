@@ -360,4 +360,878 @@ UPDATE Users
 SET role = 'admin'kh
 WHERE email = 'castroesquivellincolneduardo@gmail.com';
 
+--actualizacion para notificar al admin reservas de maquinaria proximas a vencer
+-- ==========================================
+-- FECHAS DE LA RESERVA
+-- ==========================================
+ALTER TABLE cotizaciones
+ADD COLUMN start_date DATE,
+ADD COLUMN end_date DATE;
 
+-- ==========================================
+-- APROBACIÓN / RECHAZO
+-- ==========================================
+ALTER TABLE cotizaciones
+ADD COLUMN approved_by INT,
+ADD COLUMN approved_at TIMESTAMP,
+ADD COLUMN rejection_reason TEXT;
+
+ALTER TABLE cotizaciones
+ADD CONSTRAINT cotizaciones_approved_by_fkey
+FOREIGN KEY (approved_by) REFERENCES Users(user_id);
+
+-- ==========================================
+-- NOTIFICACIONES DE VENCIMIENTO
+-- ==========================================
+ALTER TABLE cotizaciones
+ADD COLUMN notificado_vencimiento BOOLEAN DEFAULT FALSE,
+ADD COLUMN fecha_notificacion TIMESTAMP;
+
+-- ==========================================
+-- EXTENDER LOS ESTADOS POSIBLES
+-- ==========================================
+ALTER TABLE cotizaciones
+DROP CONSTRAINT IF EXISTS cotizaciones_status_check;
+
+ALTER TABLE cotizaciones
+ADD CONSTRAINT cotizaciones_status_check
+CHECK (status IN (
+    'pending',      -- esperando aprobación del admin
+    'approved',     -- aprobada, stock bloqueado
+    'rejected',     -- rechazada por el admin
+    'active',       -- en curso (fecha actual dentro del rango)
+    'completed',    -- finalizada
+    'cancelled'     -- cancelada por el cliente
+));
+-- Búsquedas por rango de fechas (muy usado al verificar solapamientos)
+CREATE INDEX idx_cotizaciones_fechas
+ON cotizaciones(start_date, end_date)
+WHERE status IN ('approved', 'active');
+
+-- Búsquedas de reservas por vencer
+CREATE INDEX idx_cotizaciones_end_date
+ON cotizaciones(end_date)
+WHERE status IN ('approved', 'active');
+
+-- Búsquedas por usuario
+CREATE INDEX idx_cotizaciones_user
+ON cotizaciones(user_id, status);
+
+-- Búsquedas por admin aprobador
+CREATE INDEX idx_cotizaciones_approved_by
+ON cotizaciones(approved_by)
+WHERE approved_by IS NOT NULL;
+
+--vista de stock bloqueado--
+CREATE OR REPLACE VIEW v_stock_bloqueado AS
+SELECT
+    dc.product_id,
+    c.start_date,
+    c.end_date,
+    SUM(dc.quantity) AS cantidad_bloqueada
+FROM detalle_cotizaciones dc
+INNER JOIN cotizaciones c ON c.cotizacion_id = dc.cotizacion_id
+WHERE c.status IN ('approved', 'active')
+GROUP BY dc.product_id, c.start_date, c.end_date;
+--vista de reservas proximas a vencer
+CREATE OR REPLACE VIEW v_stock_bloqueado AS
+SELECT
+    dc.product_id,
+    c.start_date,
+    c.end_date,
+    SUM(dc.quantity) AS cantidad_bloqueada
+FROM detalle_cotizaciones dc
+INNER JOIN cotizaciones c ON c.cotizacion_id = dc.cotizacion_id
+WHERE c.status IN ('approved', 'active')
+GROUP BY dc.product_id, c.start_date, c.end_date;
+--funciones--
+-- ============================================================
+-- FUNCIÓN: fn_stock_disponible
+-- PROPÓSITO: Calcular cuántas unidades de un producto están libres
+--            en un rango de fechas específico.
+-- PARÁMETROS:
+--   p_product_id  → ID del producto a consultar
+--   p_start_date  → fecha de inicio del rango deseado
+--   p_end_date    → fecha de fin del rango deseado
+-- RETORNA: INT (unidades disponibles) o -1 si el producto no existe
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_stock_disponible(
+    p_product_id INT,
+    p_start_date DATE,
+    p_end_date DATE
+)
+RETURNS INT                        -- La función devuelve un número entero
+LANGUAGE plpgsql                   -- Lenguaje procedural de PostgreSQL
+AS $$
+-- DECLARE: aquí se declaran las variables locales que usaremos
+DECLARE
+    v_stock_total INT;             -- Almacenará el stock total del producto
+    v_bloqueado INT;               -- Almacenará las unidades ya reservadas en el rango
+BEGIN
+    -- ─────────────────────────────────────────────
+    -- PASO 1: Obtener el stock total del producto
+    -- ─────────────────────────────────────────────
+    SELECT stock_quantity INTO v_stock_total      -- Guarda el resultado en la variable
+    FROM Products                                  -- Tabla de productos
+    WHERE product_id = p_product_id;               -- Filtra por el ID recibido
+
+    -- Si no se encontró el producto, v_stock_total será NULL
+    IF v_stock_total IS NULL THEN
+        RETURN -1;                                 -- -1 indica "producto no encontrado"
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 2: Sumar cuántas unidades están bloqueadas
+    --         en reservas aprobadas/activas que SE SOLAPEN
+    --         con el rango solicitado
+    -- ─────────────────────────────────────────────
+    SELECT COALESCE(SUM(dc.quantity), 0) INTO v_bloqueado   -- COALESCE: si no hay filas, usar 0
+    FROM detalle_cotizaciones dc                            -- Tabla de detalle de cada reserva
+    INNER JOIN cotizaciones c                               -- Unimos con la cabecera de la reserva
+        ON c.cotizacion_id = dc.cotizacion_id               -- Por su ID
+    WHERE dc.product_id = p_product_id                      -- Solo del producto pedido
+      AND c.status IN ('approved', 'active')                -- Solo reservas vigentes
+      -- ↓ CONDICIÓN DE SOLAPAMIENTO DE FECHAS ↓
+      -- Dos rangos se solapan si: inicio_reserva <= fin_pedido
+      --                     AND  fin_reserva   >= inicio_pedido
+      AND c.start_date <= p_end_date
+      AND c.end_date >= p_start_date;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 3: Devolver el resultado final
+    -- ─────────────────────────────────────────────
+    RETURN v_stock_total - v_bloqueado;         -- Stock total menos lo bloqueado
+END;
+$$;
+
+-- ============================================================
+-- FUNCIÓN: fn_crear_reserva
+-- PROPÓSITO: Crear una reserva (cotización en estado "pending")
+--            validando que haya stock en las fechas elegidas.
+-- PARÁMETROS:
+--   p_user_id        → ID del cliente que reserva
+--   p_start_date     → fecha de inicio de la reserva
+--   p_end_date       → fecha de fin de la reserva
+--   p_observaciones  → notas opcionales del cliente
+--   p_items          → JSON con [{product_id, quantity, price}, ...]
+-- RETORNA: Tabla con (cotizacion_id, total, mensaje)
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_crear_reserva(
+    p_user_id INT,
+    p_start_date DATE,
+    p_end_date DATE,
+    p_observaciones TEXT,
+    p_items JSONB                  -- JSONB: tipo de dato JSON binario de PostgreSQL
+)
+RETURNS TABLE (
+    cotizacion_id INT,             -- ID de la reserva creada
+    total NUMERIC,                 -- Total final con IVA
+    mensaje TEXT                   -- Mensaje de éxito o error
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_cotizacion_id INT;           -- Guardará el ID de la nueva cotización
+    v_item JSONB;                  -- Variable para iterar cada ítem del JSON
+    v_subtotal NUMERIC := 0;       -- Acumulador del subtotal (sin IVA)
+    v_iva NUMERIC;                 -- IVA calculado (19%)
+    v_total NUMERIC;               -- Total final (subtotal + IVA)
+    v_precio NUMERIC;              -- Precio unitario de cada ítem
+    v_cantidad INT;                -- Cantidad de cada ítem
+    v_product_id INT;              -- ID del producto de cada ítem
+    v_disponible INT;              -- Stock disponible en el rango
+BEGIN
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 1: Fechas obligatorias
+    -- ─────────────────────────────────────────────
+    IF p_start_date IS NULL OR p_end_date IS NULL THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'Debes elegir fechas de inicio y fin'::TEXT;
+        RETURN;                    -- Salir de la función
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 2: Coherencia de fechas
+    -- ─────────────────────────────────────────────
+    IF p_start_date > p_end_date THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'La fecha de inicio no puede ser posterior a la de fin'::TEXT;
+        RETURN;
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 3: No reservar en el pasado
+    -- ─────────────────────────────────────────────
+    IF p_start_date < CURRENT_DATE THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'No puedes reservar en fechas pasadas'::TEXT;
+        RETURN;
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 4: El usuario debe existir
+    -- ─────────────────────────────────────────────
+    IF NOT EXISTS (SELECT 1 FROM Users WHERE user_id = p_user_id) THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'Usuario no encontrado'::TEXT;
+        RETURN;
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 1: Recorrer cada ítem y validar disponibilidad
+    -- ─────────────────────────────────────────────
+    -- jsonb_array_elements(): convierte un array JSON en filas
+    FOR v_item IN SELECT jsonb_array_elements(p_items) LOOP
+        -- Extraer datos del JSON
+        v_product_id := (v_item->>'product_id')::INT;    -- >> extrae como texto, ::INT castea
+        v_cantidad := (v_item->>'quantity')::INT;
+
+        -- Llamar a la función de disponibilidad
+        v_disponible := fn_stock_disponible(v_product_id, p_start_date, p_end_date);
+
+        -- Validar que el producto exista
+        IF v_disponible < 0 THEN
+            RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+                ('Producto ' || v_product_id || ' no encontrado')::TEXT;
+            RETURN;
+        END IF;
+
+        -- Validar que haya suficiente stock
+        IF v_disponible < v_cantidad THEN
+            RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+                ('Stock insuficiente para el producto ' || v_product_id ||
+                 ' (disponible: ' || v_disponible || ')')::TEXT;
+            RETURN;
+        END IF;
+
+        -- Sumar al subtotal: precio × cantidad
+        v_precio := (v_item->>'price')::NUMERIC;
+        v_subtotal := v_subtotal + (v_precio * v_cantidad);
+    END LOOP;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 2: Calcular IVA y total
+    -- ─────────────────────────────────────────────
+    v_iva := v_subtotal * 0.19;    -- IVA del 19% (Colombia)
+    v_total := v_subtotal + v_iva;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 3: Insertar la cotización (cabecera)
+    -- ─────────────────────────────────────────────
+    INSERT INTO cotizaciones (
+        user_id, iva, total_price, status,
+        observations, start_date, end_date
+    )
+    VALUES (
+        p_user_id, v_iva, v_total, 'pending',          -- Estado inicial: pendiente
+        p_observaciones, p_start_date, p_end_date
+    )
+    RETURNING cotizaciones.cotizacion_id INTO v_cotizacion_id;  -- Captura el ID generado
+
+    -- ─────────────────────────────────────────────
+    -- PASO 4: Insertar los detalles (cada ítem)
+    -- ─────────────────────────────────────────────
+    FOR v_item IN SELECT jsonb_array_elements(p_items) LOOP
+        INSERT INTO detalle_cotizaciones (cotizacion_id, product_id, quantity, price)
+        VALUES (
+            v_cotizacion_id,
+            (v_item->>'product_id')::INT,
+            (v_item->>'quantity')::INT,
+            (v_item->>'price')::NUMERIC
+        );
+    END LOOP;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 5: Devolver éxito
+    -- ─────────────────────────────────────────────
+    RETURN QUERY SELECT v_cotizacion_id, v_total,
+        'Reserva creada. Espera la aprobación de un administrador.'::TEXT;
+
+-- ─────────────────────────────────────────────
+-- MANEJO DE ERRORES: si algo falla, se revierte todo
+-- ─────────────────────────────────────────────
+EXCEPTION
+    WHEN OTHERS THEN                                    -- Cualquier error
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC, SQLERRM::TEXT;
+END;
+$$;
+-- ============================================================
+-- FUNCIÓN: fn_aprobar_reserva
+-- PROPÓSITO: Aprobar una reserva pendiente. Solo admins pueden.
+--            Antes de aprobar, RE-VALIDA el stock por si alguien
+--            más reservó mientras tanto.
+-- PARÁMETROS:
+--   p_cotizacion_id → ID de la reserva a aprobar
+--   p_admin_id      → ID del admin que aprueba
+-- RETORNA: TEXT (mensaje de éxito o error)
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_aprobar_reserva(
+    p_cotizacion_id INT,
+    p_admin_id INT
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_status VARCHAR;              -- Estado actual de la reserva
+    v_admin_role VARCHAR;          -- Rol del usuario que aprueba
+    v_item RECORD;                 -- Variable para iterar los ítems
+    v_disponible INT;              -- Stock disponible actual
+BEGIN
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 1: El usuario debe ser admin
+    -- ─────────────────────────────────────────────
+    SELECT role INTO v_admin_role FROM Users WHERE user_id = p_admin_id;
+
+    IF v_admin_role IS NULL OR v_admin_role != 'admin' THEN
+        RETURN 'Solo un administrador puede aprobar reservas';
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 2: La reserva debe existir y estar pendiente
+    -- ─────────────────────────────────────────────
+    SELECT status INTO v_status FROM cotizaciones WHERE cotizacion_id = p_cotizacion_id;
+
+    IF v_status IS NULL THEN
+        RETURN 'Reserva no encontrada';
+    END IF;
+
+    IF v_status != 'pending' THEN
+        RETURN 'Solo se pueden aprobar reservas pendientes';
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 1: RE-VALIDAR stock de cada ítem
+    -- (Por si otro admin aprobó algo que ya bloquea el stock)
+    -- ─────────────────────────────────────────────
+    FOR v_item IN
+        SELECT dc.product_id, dc.quantity, c.start_date, c.end_date
+        FROM detalle_cotizaciones dc
+        INNER JOIN cotizaciones c ON c.cotizacion_id = dc.cotizacion_id
+        WHERE dc.cotizacion_id = p_cotizacion_id
+    LOOP
+        v_disponible := fn_stock_disponible(
+            v_item.product_id,
+            v_item.start_date,
+            v_item.end_date
+        );
+
+        IF v_disponible < v_item.quantity THEN
+            RETURN 'No se puede aprobar: stock insuficiente para el producto ' || v_item.product_id;
+        END IF;
+    END LOOP;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 2: Actualizar estado a 'approved'
+    -- ─────────────────────────────────────────────
+    UPDATE cotizaciones
+    SET status = 'approved',                    -- Nuevo estado
+        approved_by = p_admin_id,               -- Quién aprobó
+        approved_at = CURRENT_TIMESTAMP         -- Cuándo aprobó
+    WHERE cotizacion_id = p_cotizacion_id;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 3: Devolver éxito
+    -- ─────────────────────────────────────────────
+    RETURN 'Reserva aprobada. Stock bloqueado.';
+END;
+$$;
+-- ============================================================
+-- FUNCIÓN: fn_rechazar_reserva
+-- PROPÓSITO: Rechazar una reserva pendiente con un motivo.
+--            Solo admins pueden.
+-- PARÁMETROS:
+--   p_cotizacion_id → ID de la reserva a rechazar
+--   p_admin_id      → ID del admin que rechaza
+--   p_motivo        → Razón del rechazo (se guarda para el cliente)
+-- RETORNA: TEXT (mensaje de éxito o error)
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_rechazar_reserva(
+    p_cotizacion_id INT,
+    p_admin_id INT,
+    p_motivo TEXT
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_admin_role VARCHAR;          -- Rol del admin
+BEGIN
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN: El usuario debe ser admin
+    -- ─────────────────────────────────────────────
+    SELECT role INTO v_admin_role FROM Users WHERE user_id = p_admin_id;
+
+    IF v_admin_role IS NULL OR v_admin_role != 'admin' THEN
+        RETURN 'Solo un administrador puede rechazar reservas';
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- ACTUALIZACIÓN: Cambiar estado a 'rejected'
+    -- Solo si está en 'pending' (no re-rechazar)
+    -- ─────────────────────────────────────────────
+    UPDATE cotizaciones
+    SET status = 'rejected',                   -- Nuevo estado
+        approved_by = p_admin_id,              -- Quién rechazó
+        approved_at = CURRENT_TIMESTAMP,       -- Cuándo
+        rejection_reason = p_motivo            -- Por qué
+    WHERE cotizacion_id = p_cotizacion_id
+      AND status = 'pending';                  -- Solo si está pendiente
+
+    -- FOUND: variable especial que indica si el UPDATE afectó filas
+    IF NOT FOUND THEN
+        RETURN 'No se pudo rechazar (no existe o no está pendiente)';
+    END IF;
+
+    RETURN 'Reserva rechazada';
+END;
+$$;
+-- ============================================================
+-- FUNCIÓN: fn_reservas_por_vencer
+-- PROPÓSITO: Listar reservas activas o aprobadas que terminen
+--            en los próximos 3 días, para que el admin las
+--            prepare (devolución, renovación, etc.)
+-- RETORNA: Tabla con datos de cada reserva próxima a vencer
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_reservas_por_vencer()
+RETURNS TABLE (
+    cotizacion_id INT,
+    username VARCHAR,
+    cliente_email VARCHAR,
+    end_date DATE,
+    dias_restantes INT,
+    total_price NUMERIC,
+    notificado BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Simplemente retorna el contenido de la vista ya creada
+    RETURN QUERY
+    SELECT
+        v.cotizacion_id,
+        v.username,
+        v.cliente_email,
+        v.end_date,
+        v.dias_restantes::INT,                 -- Cast a INT (era interval)
+        v.total_price,
+        v.notificado_vencimiento
+    FROM v_reservas_por_vencer v;             -- La vista hace el filtrado por fechas
+END;
+$$;
+-- ============================================================
+-- FUNCIÓN: fn_marcar_notificada
+-- PROPÓSITO: Marcar una reserva como "ya notificada" para NO
+--            enviar el email dos veces al mismo admin.
+-- PARÁMETROS:
+--   p_cotizacion_id → ID de la reserva notificada
+-- RETORNA: TEXT (mensaje)
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_marcar_notificada(p_cotizacion_id INT)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- ─────────────────────────────────────────────
+    -- ACTUALIZACIÓN: marcar como notificada
+    -- Solo si todavía NO estaba notificada (evita doble envío)
+    -- ─────────────────────────────────────────────
+    UPDATE cotizaciones
+    SET notificado_vencimiento = TRUE,              -- Bandera de control
+        fecha_notificacion = CURRENT_TIMESTAMP      -- Auditoría
+    WHERE cotizacion_id = p_cotizacion_id
+      AND notificado_vencimiento = FALSE;           -- ← clave: solo si no se había notificado
+
+    -- Si no se actualizó nada, es porque ya estaba notificada
+    IF NOT FOUND THEN
+        RETURN 'La reserva ya fue notificada o no existe';
+    END IF;
+
+    RETURN 'Notificación marcada';
+END;
+$$;
+-- ============================================================
+-- FUNCIÓN: fn_actualizar_estados_reservas
+-- PROPÓSITO: Actualizar automáticamente el estado de las
+--            reservas según las fechas actuales:
+--              approved → active   (cuando llega start_date)
+--              active   → completed (cuando pasa end_date)
+-- RETORNA: Tabla con cantidad de filas actualizadas y detalle
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_actualizar_estados_reservas()
+RETURNS TABLE (
+    actualizadas INT,
+    detalle TEXT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_count INT := 0;               -- Contador de filas actualizadas
+BEGIN
+    -- ─────────────────────────────────────────────
+    -- CAMBIO 1: approved → active
+    -- (cuando la fecha de hoy está dentro del rango)
+    -- ─────────────────────────────────────────────
+    UPDATE cotizaciones
+    SET status = 'active'
+    WHERE status = 'approved'
+      AND start_date <= CURRENT_DATE          -- Ya empezó
+      AND end_date >= CURRENT_DATE;           -- Y aún no termina
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;      -- Cuántas filas se actualizaron
+    IF v_count > 0 THEN
+        RETURN QUERY SELECT v_count, ('Activadas: ' || v_count)::TEXT;
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- CAMBIO 2: active → completed
+    -- (cuando ya pasó la fecha de fin)
+    -- ─────────────────────────────────────────────
+    UPDATE cotizaciones
+    SET status = 'completed'
+    WHERE status = 'active'
+      AND end_date < CURRENT_DATE;            -- Ya terminó
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    IF v_count > 0 THEN
+        RETURN QUERY SELECT v_count, ('Completadas: ' || v_count)::TEXT;
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- Si no hubo cambios, informarlo
+    -- ─────────────────────────────────────────────
+    IF v_count = 0 THEN
+        RETURN QUERY SELECT 0, 'Sin cambios'::TEXT;
+    END IF;
+END;
+$$;
+-- ============================================================
+-- ARREGLAR TIPOS DE DATOS EN cotizaciones
+-- ============================================================
+-- iva: de NUMERIC(5,2) → NUMERIC(12,2)
+--      Ahora soporta hasta 9,999,999,999.99
+ALTER TABLE cotizaciones
+ALTER COLUMN iva TYPE NUMERIC(12, 2);
+
+-- total_price: de NUMERIC(10,2) → NUMERIC(14,2)
+--      Por si el total se hace grande con varios productos
+ALTER TABLE cotizaciones
+ALTER COLUMN total_price TYPE NUMERIC(14, 2);
+-- Agregar columna de precio de alquiler mensual
+ALTER TABLE Products
+ADD COLUMN IF NOT EXISTS monthly_price NUMERIC(14, 2);
+
+-- Actualizar con precios razonables para pruebas
+UPDATE Products SET monthly_price = 2500000 WHERE product_id = 1;  -- Cargador
+UPDATE Products SET monthly_price = 150000  WHERE product_id = 2;  -- Pulidora
+UPDATE Products SET monthly_price = 3800000 WHERE product_id = 3;  -- Excavadora
+UPDATE Products SET monthly_price = 180000  WHERE product_id = 4;  -- Rotomartillo
+
+-- Verificar
+SELECT product_id, name, monthly_price FROM Products;
+-- Eliminar la versión anterior
+DROP FUNCTION IF EXISTS fn_crear_reserva(INT, DATE, DATE, TEXT, JSONB);
+
+-- ============================================================
+-- FUNCIÓN: fn_crear_reserva (versión por meses)
+-- PROPÓSITO: Crear una reserva con duración en MESES. El precio
+--            se obtiene automáticamente de Products.monthly_price.
+-- PARÁMETROS:
+--   p_user_id        → cliente que reserva
+--   p_start_date     → fecha de inicio
+--   p_months         → cantidad de meses (mínimo 1)
+--   p_observaciones  → notas opcionales
+--   p_items          → JSON [{product_id, quantity}]
+-- RETORNA: (cotizacion_id, total, mensaje)
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_crear_reserva(
+    p_user_id INT,
+    p_start_date DATE,
+    p_months INT,
+    p_observaciones TEXT,
+    p_items JSONB
+)
+RETURNS TABLE (
+    cotizacion_id INT,
+    total NUMERIC,
+    mensaje TEXT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_cotizacion_id INT;
+    v_item JSONB;
+    v_subtotal NUMERIC := 0;
+    v_iva NUMERIC;
+    v_total NUMERIC;
+    v_precio_mensual NUMERIC;
+    v_cantidad INT;
+    v_product_id INT;
+    v_disponible INT;
+    v_end_date DATE;
+    v_dias_restantes INT;
+BEGIN
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 1: Meses mínimo 1
+    -- ─────────────────────────────────────────────
+    IF p_months IS NULL OR p_months < 1 THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'La reserva mínima es de 1 mes'::TEXT;
+        RETURN;
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 2: Fecha obligatoria y no pasada
+    -- ─────────────────────────────────────────────
+    IF p_start_date IS NULL THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'Debes elegir una fecha de inicio'::TEXT;
+        RETURN;
+    END IF;
+
+    IF p_start_date < CURRENT_DATE THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'No puedes reservar en fechas pasadas'::TEXT;
+        RETURN;
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- VALIDACIÓN 3: Usuario existe
+    -- ─────────────────────────────────────────────
+    IF NOT EXISTS (SELECT 1 FROM Users WHERE user_id = p_user_id) THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'Usuario no encontrado'::TEXT;
+        RETURN;
+    END IF;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 1: Calcular end_date = start_date + N meses
+    -- ─────────────────────────────────────────────
+    v_end_date := p_start_date + (p_months || ' months')::INTERVAL;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 2: Validar disponibilidad y sumar subtotal
+    -- ─────────────────────────────────────────────
+    FOR v_item IN SELECT jsonb_array_elements(p_items) LOOP
+        v_product_id := (v_item->>'product_id')::INT;
+        v_cantidad := (v_item->>'quantity')::INT;
+
+        -- Validar producto y obtener su precio mensual
+        SELECT monthly_price INTO v_precio_mensual
+        FROM Products WHERE product_id = v_product_id;
+
+        IF v_precio_mensual IS NULL THEN
+            RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+                ('Producto ' || v_product_id || ' no encontrado')::TEXT;
+            RETURN;
+        END IF;
+
+        -- Validar stock en el rango
+        v_disponible := fn_stock_disponible(v_product_id, p_start_date, v_end_date);
+
+        IF v_disponible < v_cantidad THEN
+            RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+                ('Stock insuficiente para el producto ' || v_product_id ||
+                 ' (disponible: ' || v_disponible || ')')::TEXT;
+            RETURN;
+        END IF;
+
+        -- subtotal += precio_mensual × meses × cantidad
+        v_subtotal := v_subtotal + (v_precio_mensual * p_months * v_cantidad);
+    END LOOP;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 3: Calcular IVA y total
+    -- ─────────────────────────────────────────────
+    v_iva := v_subtotal * 0.19;
+    v_total := v_subtotal + v_iva;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 4: Insertar cotización
+    -- ─────────────────────────────────────────────
+    INSERT INTO cotizaciones (
+        user_id, iva, total_price, status,
+        observations, start_date, end_date
+    )
+    VALUES (
+        p_user_id, v_iva, v_total, 'pending',
+        p_observaciones, p_start_date, v_end_date
+    )
+    RETURNING cotizaciones.cotizacion_id INTO v_cotizacion_id;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 5: Insertar detalle
+    -- ─────────────────────────────────────────────
+    FOR v_item IN SELECT jsonb_array_elements(p_items) LOOP
+        v_product_id := (v_item->>'product_id')::INT;
+        v_cantidad := (v_item->>'quantity')::INT;
+
+        SELECT monthly_price INTO v_precio_mensual
+        FROM Products WHERE product_id = v_product_id;
+
+        INSERT INTO detalle_cotizaciones (cotizacion_id, product_id, quantity, price)
+        VALUES (
+            v_cotizacion_id,
+            v_product_id,
+            v_cantidad,
+            v_precio_mensual * p_months       -- precio total del ítem por los meses
+        );
+    END LOOP;
+
+    -- ─────────────────────────────────────────────
+    -- PASO 6: Éxito
+    -- ─────────────────────────────────────────────
+    RETURN QUERY SELECT v_cotizacion_id, v_total,
+        ('Reserva creada por ' || p_months || ' mes(es). Espera aprobación.')::TEXT;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC, SQLERRM::TEXT;
+END;
+$$;
+
+-- Permisos (si usas ce_app)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ce_app') THEN
+        GRANT EXECUTE ON FUNCTION fn_crear_reserva(INT, DATE, INT, TEXT, JSONB) TO ce_app;
+    END IF;
+END $$;
+-- ============================================================
+DROP FUNCTION IF EXISTS fn_crear_reserva(INT, DATE, DATE, TEXT, JSONB);
+DROP FUNCTION IF EXISTS fn_crear_reserva(INT, DATE, INT, TEXT, JSONB);
+
+CREATE OR REPLACE FUNCTION fn_crear_reserva(
+    p_user_id INT,
+    p_start_date DATE,
+    p_months INT,
+    p_observaciones TEXT,
+    p_items JSONB      -- [{"product_id": 1, "quantity": 2}]
+)
+RETURNS TABLE (
+    cotizacion_id INT,
+    total NUMERIC,
+    mensaje TEXT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_cotizacion_id INT;
+    v_item JSONB;
+    v_subtotal NUMERIC := 0;
+    v_iva NUMERIC;
+    v_total NUMERIC;
+    v_precio_mensual NUMERIC;
+    v_cantidad INT;
+    v_product_id INT;
+    v_disponible INT;
+    v_end_date DATE;
+BEGIN
+    -- Validación 1: meses mínimo 1
+    IF p_months IS NULL OR p_months < 1 THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'La reserva mínima es de 1 mes'::TEXT;
+        RETURN;
+    END IF;
+
+    -- Validación 2: fecha válida
+    IF p_start_date IS NULL THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'Debes elegir una fecha de inicio'::TEXT;
+        RETURN;
+    END IF;
+
+    IF p_start_date < CURRENT_DATE THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'No puedes reservar en fechas pasadas'::TEXT;
+        RETURN;
+    END IF;
+
+    -- Validación 3: usuario existe
+    IF NOT EXISTS (SELECT 1 FROM Users WHERE user_id = p_user_id) THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+            'Usuario no encontrado'::TEXT;
+        RETURN;
+    END IF;
+
+    -- Calcular fecha fin sumando meses
+    v_end_date := p_start_date + (p_months || ' months')::INTERVAL;
+
+    -- Validar cada ítem
+    FOR v_item IN SELECT jsonb_array_elements(p_items) LOOP
+        v_product_id := (v_item->>'product_id')::INT;
+        v_cantidad := (v_item->>'quantity')::INT;
+
+        -- Precio mensual desde inventory
+        SELECT i.initial_price INTO v_precio_mensual
+        FROM inventory i
+        WHERE i.product_id = v_product_id
+        LIMIT 1;
+
+        IF v_precio_mensual IS NULL THEN
+            RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+                ('Producto ' || v_product_id || ' sin inventario')::TEXT;
+            RETURN;
+        END IF;
+
+        v_disponible := fn_stock_disponible(v_product_id, p_start_date, v_end_date);
+
+        IF v_disponible < v_cantidad THEN
+            RETURN QUERY SELECT NULL::INT, NULL::NUMERIC,
+                ('Stock insuficiente para el producto ' || v_product_id ||
+                 ' (disponible: ' || v_disponible || ')')::TEXT;
+            RETURN;
+        END IF;
+
+        v_subtotal := v_subtotal + (v_precio_mensual * p_months * v_cantidad);
+    END LOOP;
+
+    v_iva := v_subtotal * 0.19;
+    v_total := v_subtotal + v_iva;
+
+    -- Insertar cotización
+    INSERT INTO cotizaciones (
+        user_id, iva, total_price, status,
+        observations, start_date, end_date
+    )
+    VALUES (
+        p_user_id, v_iva, v_total, 'pending',
+        p_observaciones, p_start_date, v_end_date
+    )
+    RETURNING cotizaciones.cotizacion_id INTO v_cotizacion_id;
+
+    -- Insertar detalle
+    FOR v_item IN SELECT jsonb_array_elements(p_items) LOOP
+        v_product_id := (v_item->>'product_id')::INT;
+        v_cantidad := (v_item->>'quantity')::INT;
+
+        SELECT i.initial_price INTO v_precio_mensual
+        FROM inventory i
+        WHERE i.product_id = v_product_id
+        LIMIT 1;
+
+        INSERT INTO detalle_cotizaciones (cotizacion_id, product_id, quantity, price)
+        VALUES (
+            v_cotizacion_id,
+            v_product_id,
+            v_cantidad,
+            v_precio_mensual * p_months
+        );
+    END LOOP;
+
+    RETURN QUERY SELECT v_cotizacion_id, v_total,
+        ('Reserva creada por ' || p_months || ' mes(es). Espera aprobación.')::TEXT;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN QUERY SELECT NULL::INT, NULL::NUMERIC, SQLERRM::TEXT;
+END;
+$$;
+
+-- Permisos
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ce_app') THEN
+        GRANT EXECUTE ON FUNCTION fn_crear_reserva(INT, DATE, INT, TEXT, JSONB) TO ce_app;
+    END IF;
+END $$;

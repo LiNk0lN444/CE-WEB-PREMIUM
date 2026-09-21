@@ -1,6 +1,8 @@
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional
 from datetime import datetime
+from datetime import date
+from typing import List
 
 
 # ==========================================
@@ -207,3 +209,65 @@ class LoginResponse(BaseModel):
     phone_number: Optional[str] = None
     status: str
     role: str
+# ==========================================
+# RESERVAS (sistema por meses)
+# ==========================================
+
+
+
+class ReservaItem(BaseModel):
+    """Ítem de la reserva. El precio NO se envía — lo toma el backend de inventory."""
+    product_id: int
+    quantity: int
+
+
+class ReservaCreate(BaseModel):
+    """Datos para crear una reserva por meses."""
+    user_id: int
+    start_date: date
+    months: int          # mínimo 1
+    observations: Optional[str] = ""
+    items: List[ReservaItem]
+
+
+class ReservaResponse(BaseModel):
+    cotizacion_id: int
+    total: float
+    mensaje: str
+
+
+class AprobarReserva(BaseModel):
+    admin_id: int
+
+
+class RechazarReserva(BaseModel):
+    admin_id: int
+    motivo: str
+
+
+class ReservaDetalle(BaseModel):
+    cotizacion_id: int
+    user_id: int
+    username: str
+    cliente_email: str
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    months: Optional[int] = None
+    total_price: float
+    status: str
+    observations: Optional[str] = None
+    approved_by: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    notificado_vencimiento: bool = False
+    dias_restantes: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DisponibilidadResponse(BaseModel):
+    product_id: int
+    start_date: date
+    end_date: date
+    disponibles: int
+    mensaje: str

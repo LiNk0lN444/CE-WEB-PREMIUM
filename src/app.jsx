@@ -4,6 +4,8 @@ import Catalogo from './components/catalogo';
 import Cotizaciones from './components/cotizaciones';
 import Inventario from './components/inventario';
 import AuthPage from './components/AuthPage';
+import ReservasAdmin from './components/ReservasAdmin';
+import { obtenerReservasPendientes } from './services/api';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(true);
@@ -24,8 +26,12 @@ export default function App() {
   // 🔐 ¿El usuario actual es admin?
   const esAdmin = usuarioSesion?.role === 'admin';
 
+  // 📊 Contador de reservas pendientes (para el badge del menú)
+  const [reservasPendientes, setReservasPendientes] = useState(0);
+
   const toggleTheme = () => setDarkMode(!darkMode);
 
+  // Scroll al inicio al cambiar de vista
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [vistaActual]);
@@ -37,8 +43,24 @@ export default function App() {
       mostrarToast('Acceso restringido. Solo administradores. 🔒', 'error');
       setVistaActual('inicio');
     }
+    if (vistaActual === 'reservas-admin' && !esAdmin) {
+      mostrarToast('Acceso restringido. Solo administradores. 🔒', 'error');
+      setVistaActual('inicio');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vistaActual, esAdmin]);
+
+  // 🔔 Cargar contador de reservas pendientes (solo para admin)
+  useEffect(() => {
+    if (!esAdmin) {
+      setReservasPendientes(0);
+      return;
+    }
+
+    obtenerReservasPendientes()
+      .then((res) => setReservasPendientes(Array.isArray(res) ? res.length : 0))
+      .catch(() => setReservasPendientes(0));
+  }, [esAdmin, vistaActual]);
 
   const handleLoginSuccess = (usuario) => {
     setUsuarioSesion(usuario);
@@ -63,6 +85,7 @@ export default function App() {
 
         <nav>
           <ul className="nav-menu-links">
+            {/* ── Inicio ── */}
             <li>
               <button
                 className={vistaActual === 'inicio' ? 'active' : ''}
@@ -72,6 +95,7 @@ export default function App() {
               </button>
             </li>
 
+            {/* ── Catálogo ── */}
             <li>
               <button
                 className={vistaActual === 'catalogo' ? 'active' : ''}
@@ -81,7 +105,7 @@ export default function App() {
               </button>
             </li>
 
-            {/* 🔐 Inventario: SOLO visible para admins */}
+            {/* ── Inventario (solo admin) ── */}
             {esAdmin && (
               <li>
                 <button
@@ -93,15 +117,44 @@ export default function App() {
               </li>
             )}
 
+            {/* ── Reservas Admin (solo admin, con badge) ── */}
+            {esAdmin && (
+              <li>
+                <button
+                  className={vistaActual === 'reservas-admin' ? 'active' : ''}
+                  onClick={() => setVistaActual('reservas-admin')}
+                >
+                  Reservas
+                  {reservasPendientes > 0 && (
+                    <span
+                      style={{
+                        marginLeft: '6px',
+                        background: '#b21420',
+                        color: 'white',
+                        borderRadius: '10px',
+                        padding: '2px 8px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      🔔 {reservasPendientes}
+                    </span>
+                  )}
+                </button>
+              </li>
+            )}
+
+            {/* ── Cotizaciones / Reservas (cliente) ── */}
             <li>
               <button
                 className={vistaActual === 'cotizaciones' ? 'active' : ''}
                 onClick={() => setVistaActual('cotizaciones')}
               >
-                Cotizaciones
+                {esAdmin ? 'Cotizaciones' : 'Mis Reservas'}
               </button>
             </li>
 
+            {/* ── Sesión ── */}
             <li>
               {usuarioSesion ? (
                 <button
@@ -122,6 +175,7 @@ export default function App() {
               )}
             </li>
 
+            {/* ── Modo claro/oscuro ── */}
             <li>
               <button className="btn-theme-toggle" onClick={toggleTheme}>
                 {darkMode ? '☀️ Modo Claro' : '🌙 Modo Oscuro'}
@@ -132,6 +186,9 @@ export default function App() {
       </header>
 
       <main className="main-content-container">
+        {/* ═══════════════════════════════════════════
+            VISTA: INICIO (landing)
+        ═══════════════════════════════════════════ */}
         {vistaActual === 'inicio' && (
           <div className="landing-modern">
             <section className="hero-fixed-background">
@@ -171,7 +228,7 @@ export default function App() {
                       className="btn-hero-secondary"
                       onClick={() => setVistaActual('cotizaciones')}
                     >
-                      Solicitar Cotización 📑
+                      {esAdmin ? 'Gestionar Reservas 📑' : 'Solicitar Reserva 📑'}
                     </button>
                   </div>
                 </div>
@@ -182,6 +239,9 @@ export default function App() {
           </div>
         )}
 
+        {/* ═══════════════════════════════════════════
+            VISTA: LOGIN
+        ═══════════════════════════════════════════ */}
         {vistaActual === 'login' && (
           <AuthPage
             onLoginSuccess={handleLoginSuccess}
@@ -189,8 +249,14 @@ export default function App() {
           />
         )}
 
+        {/* ═══════════════════════════════════════════
+            VISTA: CATÁLOGO (todos)
+        ═══════════════════════════════════════════ */}
         {vistaActual === 'catalogo' && <Catalogo darkMode={darkMode} />}
 
+        {/* ═══════════════════════════════════════════
+            VISTA: RESERVAS (cliente)
+        ═══════════════════════════════════════════ */}
         {vistaActual === 'cotizaciones' && (
           <Cotizaciones
             darkMode={darkMode}
@@ -198,13 +264,24 @@ export default function App() {
           />
         )}
 
-        {/* 🔐 Doble validación: además de ocultar el botón, bloqueamos la vista */}
+        {/* ═══════════════════════════════════════════
+            VISTA: INVENTARIO (solo admin)
+        ═══════════════════════════════════════════ */}
         {vistaActual === 'inventario' && esAdmin && (
           <Inventario darkMode={darkMode} />
         )}
+
+        {/* ═══════════════════════════════════════════
+            VISTA: PANEL RESERVAS (solo admin)
+        ═══════════════════════════════════════════ */}
+        {vistaActual === 'reservas-admin' && esAdmin && (
+          <ReservasAdmin darkMode={darkMode} />
+        )}
       </main>
 
-      {/* 🔔 TOAST GLOBAL */}
+      {/* ═══════════════════════════════════════════
+          TOAST GLOBAL
+      ═══════════════════════════════════════════ */}
       {toast && (
         <div className={`toast-notificacion toast-${toast.tipo}`}>
           {toast.mensaje}

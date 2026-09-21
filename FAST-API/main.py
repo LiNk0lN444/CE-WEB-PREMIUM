@@ -6,16 +6,12 @@ import os
 
 load_dotenv()
 
-# Fuerza a Python a buscar 'config' y 'model'
-# en la carpeta donde está este main.py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Importaciones locales
 from config.database import Base, engine
 from model.routers import all_routers
-from model.routers import usuarios, auth
+from model.scheduler import iniciar_scheduler, detener_scheduler   # 👈 NUEVO
 
-# Verifica que las tablas definidas en los modelos existan
 try:
     Base.metadata.create_all(bind=engine)
 except Exception as e:
@@ -28,8 +24,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-
-# CORS: permite que el frontend consuma la API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,16 +32,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# Registra todos los routers de la aplicación
 for router in all_routers:
     app.include_router(router)
 
 
 @app.get("/")
 def root():
-    return {
-        "mensaje": "API CE Web funcionando correctamente"
-    }
-app.include_router(auth.router)
-app.include_router(usuarios.router)
+    return {"mensaje": "API CE Web funcionando correctamente"}
+
+
+# ─────────────────────────────────────────
+# Scheduler de tareas diarias
+# ─────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    iniciar_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    detener_scheduler()

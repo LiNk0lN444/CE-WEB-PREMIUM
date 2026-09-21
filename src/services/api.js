@@ -1,7 +1,7 @@
 // ==========================================
 // CONFIGURACIÓN DE LA API (Vite)
 // ==========================================
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 if (!API_URL && import.meta.env.DEV) {
   console.info(
@@ -167,4 +167,52 @@ export async function crearDetalleCotizacion(datos) {
 
 export async function eliminarDetalleCotizacion(detalleId) {
   return request(`/detalle-cotizaciones/${detalleId}`, { method: 'DELETE' });
+}
+
+// ==========================================
+// RESERVAS
+// ==========================================
+export async function crearReserva(datos) {
+  return request('/reservas/', {
+    method: 'POST',
+    body: JSON.stringify(datos),
+  });
+}
+
+export async function obtenerReservasPendientes() {
+  return request('/reservas/pendientes');
+}
+
+export async function obtenerMisReservas(userId) {
+  return request(`/reservas/mis-reservas/${userId}`);
+}
+
+export async function obtenerReservasPorVencer() {
+  return request('/reservas/por-vencer');
+}
+
+export async function aprobarReserva(cotizacionId, adminId) {
+  return request(`/reservas/${cotizacionId}/aprobar`, {
+    method: 'POST',
+    body: JSON.stringify({ admin_id: adminId }),
+  });
+}
+
+export async function rechazarReserva(cotizacionId, adminId, motivo) {
+  return request(`/reservas/${cotizacionId}/rechazar`, {
+    method: 'POST',
+    body: JSON.stringify({ admin_id: adminId, motivo }),
+  });
+}
+
+export async function consultarDisponibilidad(productId, startDate, endDate) {
+  return request(
+    `/reservas/disponibilidad/${productId}?start_date=${startDate}&end_date=${endDate}`
+  );
+}
+
+export async function marcarNotificada(cotizacionId) {
+  return request(`/reservas/${cotizacionId}/marcar-notificada`, {
+    method: 'POST',
+  });
 }
