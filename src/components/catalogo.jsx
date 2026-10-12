@@ -2,17 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { obtenerProductos } from '../services/api';
 import '../assests/css/catalogo.css';
 
-import imgCar966 from '../assests/IMG/car966.png';
-import imgPuli from '../assests/IMG/puli.png';
-import imgEx from '../assests/IMG/ex.png';
-import imgRoto from '../assests/IMG/roto.png';
+// Carga dinámica de todas las imágenes de la carpeta IMG
+const imagenesLocales = import.meta.glob('../assests/IMG/*.{png,jpg,jpeg,webp,svg}', {
+  eager: true,
+  import: 'default',
+});
 
-const MAPA_IMAGENES = {
-  'car966.png': imgCar966,
-  'puli.png': imgPuli,
-  'ex.png': imgEx,
-  'roto.png': imgRoto
-};
+// Convierte el mapa { '../assests/IMG/xxx.png': 'url' } a { 'xxx.png': 'url' }
+const MAPA_IMAGENES = Object.fromEntries(
+  Object.entries(imagenesLocales).map(([ruta, url]) => {
+    const nombreArchivo = ruta.split('/').pop();
+    return [nombreArchivo.toLowerCase(), url];
+  })
+);
+
+// ==========================================
+// Normaliza el tipo a "Maquinaria" o "Herramienta"
+// ==========================================
+function normalizarTipo(tipo) {
+  if (!tipo) return 'Otro';
+  const t = tipo.toLowerCase().trim();
+
+  if (t.includes('maquin')) return 'Maquinaria';
+  if (t.includes('herramient')) return 'Herramienta';
+
+  return tipo;
+}
+
 
 const PRODUCTOS_DE_PRUEBA = [
   {
@@ -88,7 +104,11 @@ export default function Catalogo({ darkMode }) {
       const data = await obtenerProductos();
 
       if (data && data.length > 0) {
-        setProductos(data);
+        const dataNormalizada = data.map((p) => ({
+        ...p,
+        type: normalizarTipo(p.type),
+      }));
+      setProductos(dataNormalizada);
       } else {
         setProductos(PRODUCTOS_DE_PRUEBA);
       }
@@ -100,24 +120,41 @@ export default function Catalogo({ darkMode }) {
   }
 
   function obtenerRutaImagen(nombreImagen) {
-    if (!nombreImagen) return null;
+  if (!nombreImagen) return null;
 
-    let nombreArchivo = nombreImagen;
-
-    if (nombreImagen.startsWith('http')) {
-      if (nombreImagen.includes('img.example.com')) {
-        const partes = nombreImagen.split('/');
-        nombreArchivo = partes[partes.length - 1];
-      } else {
-        return nombreImagen;
-      }
-    }
-
-    const nombreLimpio = nombreArchivo.replace(/^\/?(IMG\/)?/, '').trim().toLowerCase();
-    return MAPA_IMAGENES[nombreLimpio] || null;
+  // Si ya es una URL completa (http/https), devolverla tal cual
+  if (nombreImagen.startsWith('http://') || nombreImagen.startsWith('https://')) {
+    return nombreImagen;
   }
 
+  // Normalizar: minúsculas, sin espacios, sin rutas
+  let nombre = nombreImagen
+    .toLowerCase()
+    .trim()
+    .replace(/^\/?(IMG\/)?/i, '');   // quita "IMG/" o "/IMG/" al inicio
+
+  // Buscar en el mapa
+  if (MAPA_IMAGENES[nombre]) {
+    return MAPA_IMAGENES[nombre];
+  }
+
+  // Búsqueda flexible: si el nombre no tiene extensión, probar con .png
+  if (!nombre.includes('.')) {
+    const nombrePng = `${nombre}.png`;
+    if (MAPA_IMAGENES[nombrePng]) return MAPA_IMAGENES[nombrePng];
+  }
+
+  // No se encontró
+  return null;
+}
+
   function agregarACotizacion(producto) {
+    // 🔴 Validar stock
+  if (Number(producto.stock_quantity) <= 0) {
+    setMensajeCotizacion(`"${producto.name}" está agotado. No se puede agregar. 🚫`);
+    setTimeout(() => setMensajeCotizacion(null), 3000);
+    return;
+  }
     setCarrito((actual) => {
       const existe = actual.find((item) => item.product_id === producto.product_id);
       if (existe) {
@@ -149,12 +186,23 @@ export default function Catalogo({ darkMode }) {
       item.type?.toLowerCase().includes(texto) ||
       item.model_number?.toLowerCase().includes(texto);
 
-    const coincideCategoria =
-      categoriaSeleccionada === 'todos' ||
-      item.type?.toLowerCase() === categoriaSeleccionada.toLowerCase();
+    let coincideCategoria = true;
 
-    return coincideTexto && coincideCategoria;
-  });
+  if (categoriaSeleccionada !== 'todos') {
+    const tipoItem = (item.type || '').toLowerCase();
+    const categoria = categoriaSeleccionada.toLowerCase();
+
+    if (categoria === 'maquinaria') {
+      coincideCategoria = tipoItem.includes('maquin');
+    } else if (categoria === 'herramientas') {
+      coincideCategoria = tipoItem.includes('herramient');
+    } else {
+      coincideCategoria = tipoItem === categoria;
+    }
+  }
+
+  return coincideTexto && coincideCategoria;
+});
 
   return (
     <div className={`catalogo-page ${darkMode ? 'theme-dark' : 'theme-light'}`}>
@@ -220,15 +268,19 @@ export default function Catalogo({ darkMode }) {
                     {item.type && <span className="categoria-tag">{item.type}</span>}
 
                     <div className="img-pro">
-                      {srcImagen ? (
-                        <img src={srcImagen} alt={item.name} />
-                      ) : (
-                        <div className="img-placeholder">
-                          <span>⚙️</span>
-                        </div>
-                      )}
+                    {srcImagen ? (
+                    <img src={srcImagen} alt={item.name} />
+                    ) : (
+                    <div className="img-placeholder">
+                    <span>⚙️</span>
                     </div>
+                    )}
 
+                    {/* 🔴 Badge AGOTADO */}
+                    {Number(item.stock_quantity) <= 0 && (
+                    <span className="badge-agotado">AGOTADO</span>
+                    )}
+                </div>
                     <h3 className="title">{item.name}</h3>
                     <p className="text">{item.description || 'Sin descripción disponible.'}</p>
 
@@ -251,13 +303,20 @@ export default function Catalogo({ darkMode }) {
                     </button>
 
                     <button
-                      type="button"
-                      className="btn-pro"
-                      style={{ flex: 1, margin: 0, backgroundColor: '#2e7d32' }}
-                      onClick={() => agregarACotizacion(item)}
-                    >
-                      + Cotizar 🛒
-                    </button>
+                     type="button"
+                     className="btn-pro"
+                     style={{
+                     flex: 1,
+                     margin: 0,
+                     backgroundColor: Number(item.stock_quantity) > 0 ? '#2e7d32' : '#555',
+                     cursor: Number(item.stock_quantity) > 0 ? 'pointer' : 'not-allowed',
+                     opacity: Number(item.stock_quantity) > 0 ? 1 : 0.6,
+                     }}
+                     disabled={Number(item.stock_quantity) <= 0}
+                     onClick={() => agregarACotizacion(item)}
+                   >
+                     {Number(item.stock_quantity) > 0 ? '+ Cotizar 🛒' : '🚫 Agotado'}
+                  </button>
                   </div>
                 </div>
               );

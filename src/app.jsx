@@ -5,6 +5,8 @@ import Cotizaciones from './components/cotizaciones';
 import Inventario from './components/inventario';
 import AuthPage from './components/AuthPage';
 import ReservasAdmin from './components/ReservasAdmin';
+import CotizacionesAdmin from './components/CotizacionesAdmin';
+import PanelAsesor from './components/panelAsesor';
 import { obtenerReservasPendientes } from './services/api';
 
 export default function App() {
@@ -23,10 +25,11 @@ export default function App() {
     return sesionGuardada ? JSON.parse(sesionGuardada) : null;
   });
 
-  // 🔐 ¿El usuario actual es admin?
+  // 🔐 Roles
   const esAdmin = usuarioSesion?.role === 'admin';
+  const esAsesor = usuarioSesion?.role === 'asesor';
 
-  // 📊 Contador de reservas pendientes (para el badge del menú)
+  // 📊 Contador de reservas pendientes
   const [reservasPendientes, setReservasPendientes] = useState(0);
 
   const toggleTheme = () => setDarkMode(!darkMode);
@@ -36,8 +39,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [vistaActual]);
 
-  // 🔐 Bloqueo de seguridad: si NO es admin e intenta ver inventario,
-  //    lo redirigimos automáticamente al inicio.
+  // 🔐 Bloqueo de vistas por rol
   useEffect(() => {
     if (vistaActual === 'inventario' && !esAdmin) {
       mostrarToast('Acceso restringido. Solo administradores. 🔒', 'error');
@@ -47,16 +49,23 @@ export default function App() {
       mostrarToast('Acceso restringido. Solo administradores. 🔒', 'error');
       setVistaActual('inicio');
     }
+    if (vistaActual === 'cotizaciones-admin' && !esAdmin) {
+      mostrarToast('Acceso restringido. Solo administradores. 🔒', 'error');
+      setVistaActual('inicio');
+    }
+    if (vistaActual === 'panel-asesor' && !esAsesor) {
+      mostrarToast('Acceso restringido. Solo asesores. 🔒', 'error');
+      setVistaActual('inicio');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vistaActual, esAdmin]);
+  }, [vistaActual, esAdmin, esAsesor]);
 
-  // 🔔 Cargar contador de reservas pendientes (solo para admin)
+  // 🔔 Cargar contador de reservas pendientes (solo admin)
   useEffect(() => {
     if (!esAdmin) {
       setReservasPendientes(0);
       return;
     }
-
     obtenerReservasPendientes()
       .then((res) => setReservasPendientes(Array.isArray(res) ? res.length : 0))
       .catch(() => setReservasPendientes(0));
@@ -117,19 +126,19 @@ export default function App() {
               </li>
             )}
 
-            {/* ── Reservas Admin (solo admin, con badge) ── */}
+            {/* ── Cotizaciones Pendientes (solo admin, con badge) ── */}
             {esAdmin && (
               <li>
                 <button
-                  className={vistaActual === 'reservas-admin' ? 'active' : ''}
-                  onClick={() => setVistaActual('reservas-admin')}
+                  className={vistaActual === 'cotizaciones-admin' ? 'active' : ''}
+                  onClick={() => setVistaActual('cotizaciones-admin')}
                 >
-                  Reservas
+                  Cotizaciones
                   {reservasPendientes > 0 && (
                     <span
                       style={{
                         marginLeft: '6px',
-                        background: '#b21420',
+                        background: '#f57c00',
                         color: 'white',
                         borderRadius: '10px',
                         padding: '2px 8px',
@@ -137,22 +146,48 @@ export default function App() {
                         fontWeight: 'bold',
                       }}
                     >
-                      🔔 {reservasPendientes}
+                      ⏳ {reservasPendientes}
                     </span>
                   )}
                 </button>
               </li>
             )}
 
-            {/* ── Cotizaciones / Reservas (cliente) ── */}
-            <li>
-              <button
-                className={vistaActual === 'cotizaciones' ? 'active' : ''}
-                onClick={() => setVistaActual('cotizaciones')}
-              >
-                {esAdmin ? 'Cotizaciones' : 'Mis Reservas'}
-              </button>
-            </li>
+            {/* ── Reservas en Curso (solo admin) ── */}
+            {esAdmin && (
+              <li>
+                <button
+                  className={vistaActual === 'reservas-admin' ? 'active' : ''}
+                  onClick={() => setVistaActual('reservas-admin')}
+                >
+                  Reservas en Curso 🚚
+                </button>
+              </li>
+            )}
+
+            {/* ── Panel Asesor (solo asesores) ── */}
+            {esAsesor && (
+              <li>
+                <button
+                  className={vistaActual === 'panel-asesor' ? 'active' : ''}
+                  onClick={() => setVistaActual('panel-asesor')}
+                >
+                  📞 Mis Citas
+                </button>
+              </li>
+            )}
+
+            {/* ── Cotizaciones (solo clientes) ── */}
+            {!esAdmin && !esAsesor && (
+              <li>
+                <button
+                  className={vistaActual === 'cotizaciones' ? 'active' : ''}
+                  onClick={() => setVistaActual('cotizaciones')}
+                >
+                  Cotizaciones / Mis Reservas
+                </button>
+              </li>
+            )}
 
             {/* ── Sesión ── */}
             <li>
@@ -163,7 +198,8 @@ export default function App() {
                   onClick={handleCerrarSesion}
                 >
                   👤 {usuarioSesion.username || 'Usuario'}
-                  {esAdmin && ' (Admin)'} (Salir)
+                  {esAdmin && ' (Admin)'}
+                  {esAsesor && ' (Asesor)'} (Salir)
                 </button>
               ) : (
                 <button
@@ -224,12 +260,16 @@ export default function App() {
                     >
                       Explorar Catálogo 🏗️
                     </button>
-                    <button
-                      className="btn-hero-secondary"
-                      onClick={() => setVistaActual('cotizaciones')}
-                    >
-                      {esAdmin ? 'Gestionar Reservas 📑' : 'Solicitar Reserva 📑'}
-                    </button>
+                    {!esAsesor && (
+                      <button
+                        className="btn-hero-secondary"
+                        onClick={() =>
+                          setVistaActual(esAdmin ? 'cotizaciones-admin' : 'cotizaciones')
+                        }
+                      >
+                        {esAdmin ? 'Gestionar Cotizaciones 📑' : 'Solicitar Reserva 📑'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -255,13 +295,20 @@ export default function App() {
         {vistaActual === 'catalogo' && <Catalogo darkMode={darkMode} />}
 
         {/* ═══════════════════════════════════════════
-            VISTA: RESERVAS (cliente)
+            VISTA: COTIZACIONES / MIS RESERVAS (cliente)
         ═══════════════════════════════════════════ */}
-        {vistaActual === 'cotizaciones' && (
+        {vistaActual === 'cotizaciones' && !esAdmin && !esAsesor && (
           <Cotizaciones
             darkMode={darkMode}
             onNavigateLogin={() => setVistaActual('login')}
           />
+        )}
+
+        {/* ═══════════════════════════════════════════
+            VISTA: COTIZACIONES PENDIENTES (admin)
+        ═══════════════════════════════════════════ */}
+        {vistaActual === 'cotizaciones-admin' && esAdmin && (
+          <CotizacionesAdmin darkMode={darkMode} />
         )}
 
         {/* ═══════════════════════════════════════════
@@ -272,10 +319,17 @@ export default function App() {
         )}
 
         {/* ═══════════════════════════════════════════
-            VISTA: PANEL RESERVAS (solo admin)
+            VISTA: RESERVAS EN CURSO (solo admin)
         ═══════════════════════════════════════════ */}
         {vistaActual === 'reservas-admin' && esAdmin && (
           <ReservasAdmin darkMode={darkMode} />
+        )}
+
+        {/* ═══════════════════════════════════════════
+            VISTA: PANEL ASESOR
+        ═══════════════════════════════════════════ */}
+        {vistaActual === 'panel-asesor' && esAsesor && (
+          <PanelAsesor darkMode={darkMode} />
         )}
       </main>
 

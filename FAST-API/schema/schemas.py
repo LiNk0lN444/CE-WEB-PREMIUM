@@ -271,3 +271,93 @@ class DisponibilidadResponse(BaseModel):
     end_date: date
     disponibles: int
     mensaje: str
+
+
+# ==========================================
+# ASESORES
+# ==========================================
+from datetime import time as dt_time
+from typing import List
+
+
+class AsesorCreate(BaseModel):
+    user_id: int
+    nombre_completo: str
+    telefono: Optional[str] = None
+    especialidad: Optional[str] = None
+
+
+class AsesorResponse(BaseModel):
+    asesor_id: int
+    user_id: int
+    nombre_completo: str
+    telefono: Optional[str] = None
+    especialidad: Optional[str] = None
+    activo: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HorarioCreate(BaseModel):
+    dia_semana: str  # lunes, martes, miercoles, jueves, viernes, sabado, domingo
+    hora_inicio: dt_time
+    hora_fin: dt_time
+
+
+class HorarioResponse(BaseModel):
+    horario_id: int
+    asesor_id: int
+    dia_semana: str
+    hora_inicio: dt_time
+    hora_fin: dt_time
+    activo: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContratoCreate(BaseModel):
+    fecha_inicio: date
+    fecha_fin: Optional[date] = None
+    salario: float
+    tipo_contrato: str  # indefinido, fijo, prestacion_servicios
+    estado: str = "activo"
+    documento_url: Optional[str] = None
+    observaciones: Optional[str] = None
+
+
+class ContratoResponse(BaseModel):
+    contrato_id: int
+    asesor_id: int
+    fecha_inicio: date
+    fecha_fin: Optional[date] = None
+    salario: float
+    tipo_contrato: str
+    estado: str
+    documento_url: Optional[str] = None
+    observaciones: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CitaResponse(BaseModel):
+    slot_id: int
+    asesor_id: int
+    cotizacion_id: Optional[int] = None
+    fecha: date
+    hora_inicio: dt_time
+    hora_fin: dt_time
+    estado: str
+    notas: Optional[str] = None
+
+    # Info del cliente y cotización
+    cliente_username: Optional[str] = None
+    cliente_email: Optional[str] = None
+    cliente_telefono: Optional[str] = None
+    cotizacion_total: Optional[float] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CitaEstadoUpdate(BaseModel):
+    estado: str  # realizada, cancelada, no_contesto
+    notas: Optional[str] = None

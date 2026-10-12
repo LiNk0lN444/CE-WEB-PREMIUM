@@ -1,0 +1,97 @@
+.cotizaciones-admin-page { min-height: 100vh; padding: 2rem; }
+.cotizaciones-admin-main { max-width: 1200px; margin: 0 auto; }
+.cotizaciones-admin-titulo h1 { margin: 0 0 0.5rem 0; font-size: 28px; }
+.cotizaciones-admin-titulo p { color: #888; margin-bottom: 2rem; }
+.cotizaciones-admin-cargando,
+.cotizaciones-admin-vacio {
+  text-align: center; padding: 3rem; color: #888; font-size: 16px;
+}
+
+.cotizaciones-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.5rem;
+}
+
+.cotizacion-card {
+  background: #1c1c1f;
+  border: 1px solid #2a2a2d;
+  border-radius: 10px;
+  padding: 1.5rem;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.cotizacion-card:hover {
+  transform: translateY(-2px);
+  border-color: #b21420;
+}
+
+.cotizacion-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1rem; padding-bottom: 1rem;
+  border-bottom: 1px solid #2a2a2d;
+}
+
+.cotizacion-card-header h3 {
+  margin: 0; color: #f2f0ee; font-size: 18px;
+}
+
+.badge-pendiente {
+  background: #fff3cd; color: #856404;
+  padding: 4px 10px; border-radius: 4px;
+  font-size: 11px; font-weight: bold;
+}
+
+.cotizacion-card-body p {
+  margin: 6px 0; font-size: 14px; color: #ccc;
+}
+
+.cotizacion-total {
+  padding-top: 8px; margin-top: 8px;
+  border-top: 1px dashed #2a2a2d;
+  font-size: 16px !important;
+  color: #2e7d32 !important;
+}
+
+.cotizacion-observaciones {
+  margin-top: 10px !important;
+  padding: 10px;
+  background: #141416;
+  border-left: 3px solid #b21420;
+  font-style: italic;
+  font-size: 13px !important;
+  color: #aaa !important;
+}
+
+.cotizacion-card-actions {
+  display: flex; gap: 10px; margin-top: 1.5rem;
+}
+
+.btn-aprobar, .btn-rechazar, .btn-cancelar {
+  flex: 1; padding: 10px; border: none; border-radius: 6px;
+  font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+}
+.btn-aprobar { background: #2e7d32; color: white; }
+.btn-rechazar { background: #c62828; color: white; }
+.btn-cancelar { background: transparent; border: 1px solid #555; color: #ccc; }
+.btn-aprobar:hover, .btn-rechazar:hover { opacity: 0.85; }
+.btn-aprobar:disabled, .btn-rechazar:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  display: flex; justify-content: center; align-items: center;
+  z-index: 1000; padding: 1rem;
+}
+.modal-cotizacion {
+  background: #1c1c1f; border: 1px solid #2a2a2d;
+  border-radius: 10px; padding: 2rem; width: 100%; max-width: 500px;
+}
+.modal-cotizacion h3 { margin: 0 0 1rem 0; color: #f2f0ee; }
+.modal-cotizacion p { color: #ccc; margin-bottom: 1rem; }
+.modal-cotizacion textarea {
+  width: 100%; padding: 10px;
+  background: #141416; border: 1px solid #303034;
+  border-radius: 6px; color: #f2f0ee;
+  font-family: inherit; box-sizing: border-box;
+}
+.modal-cotizacion-acciones { display: flex; gap: 10px; margin-top: 1.5rem; }

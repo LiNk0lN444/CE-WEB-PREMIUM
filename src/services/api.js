@@ -216,3 +216,74 @@ export async function marcarNotificada(cotizacionId) {
     method: 'POST',
   });
 }
+
+// ==========================================
+// ASESORES
+// ==========================================
+export async function obtenerAsesores() {
+  return request('/asesores/');
+}
+
+export async function obtenerAsesor(asesorId) {
+  return request(`/asesores/${asesorId}`);
+}
+
+export async function crearAsesor(datos) {
+  return request('/asesores/', {
+    method: 'POST',
+    body: JSON.stringify(datos),
+  });
+}
+
+export async function desactivarAsesor(asesorId) {
+  return request(`/asesores/${asesorId}`, { method: 'DELETE' });
+}
+
+// Horarios
+export async function obtenerHorariosAsesor(asesorId) {
+  return request(`/asesores/${asesorId}/horarios`);
+}
+
+export async function crearHorarioAsesor(asesorId, datos) {
+  return request(`/asesores/${asesorId}/horarios`, {
+    method: 'POST',
+    body: JSON.stringify(datos),
+  });
+}
+
+export async function eliminarHorarioAsesor(horarioId) {
+  return request(`/asesores/horarios/${horarioId}`, { method: 'DELETE' });
+}
+
+// Contratos
+export async function obtenerContratosAsesor(asesorId) {
+  return request(`/asesores/${asesorId}/contratos`);
+}
+
+export async function crearContratoAsesor(asesorId, datos) {
+  return request(`/asesores/${asesorId}/contratos`, {
+    method: 'POST',
+    body: JSON.stringify(datos),
+  });
+}
+
+// Disponibilidad
+export async function verificarDisponibilidadAsesor(userId) {
+  return request(`/asesores/disponibilidad/${userId}`);
+}
+
+// Citas (panel del asesor)
+export async function obtenerMisCitas(userId) {
+  return request(`/asesores/mis-citas/${userId}`);
+}
+
+export async function actualizarEstadoCita(slotId, datos) {
+  return request(`/asesores/citas/${slotId}/estado`, {
+    method: 'PUT',
+    body: JSON.stringify(datos),
+  });
+}
+
+export async function obtenerReservasEnCurso() {
+  return request('/reservas/en-curso');
+}

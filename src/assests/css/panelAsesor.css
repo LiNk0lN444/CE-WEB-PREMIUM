@@ -1,0 +1,95 @@
+.panel-asesor-page { min-height: 100vh; padding: 2rem; }
+.panel-asesor-main { max-width: 1200px; margin: 0 auto; }
+.panel-asesor-titulo h1 { margin: 0 0 0.5rem 0; font-size: 28px; }
+.panel-asesor-titulo p { color: #888; margin-bottom: 2rem; }
+
+.disponibilidad-card {
+  display: flex; align-items: center; gap: 15px;
+  padding: 1rem 1.5rem; border-radius: 10px; margin-bottom: 2rem;
+  border: 1px solid #2a2a2d;
+}
+.disponibilidad-card.disponible { background: rgba(46,125,50,0.1); border-color: #2e7d32; }
+.disponibilidad-card.no-disponible { background: rgba(198,40,40,0.1); border-color: #c62828; }
+.disponibilidad-dot {
+  width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+}
+.disponible .disponibilidad-dot { background: #2e7d32; box-shadow: 0 0 10px #2e7d32; }
+.no-disponible .disponibilidad-dot { background: #c62828; }
+.disponibilidad-card p { margin: 5px 0 0 0; color: #888; font-size: 13px; }
+
+.panel-bloque { margin-bottom: 2.5rem; }
+.panel-bloque h2 { font-size: 18px; margin-bottom: 1rem; color: #f2f0ee; }
+.panel-cargando, .panel-vacio {
+  text-align: center; padding: 2rem; color: #888;
+}
+
+.citas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.cita-card {
+  background: #1c1c1f; border: 1px solid #2a2a2d;
+  border-radius: 10px; padding: 1.5rem;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.cita-card:hover { transform: translateY(-2px); border-color: #b21420; }
+
+.cita-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #2a2a2d;
+}
+.cita-hora { font-size: 20px; font-weight: bold; color: #b21420; }
+
+.cita-card-body p { margin: 6px 0; font-size: 14px; color: #ccc; }
+
+.cita-card-actions { display: flex; gap: 10px; margin-top: 1.5rem; }
+.btn-realizada, .btn-no-contesto, .btn-cancelar, .btn-confirmar {
+  flex: 1; padding: 10px; border: none; border-radius: 6px;
+  font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+}
+.btn-realizada { background: #2e7d32; color: white; }
+.btn-no-contesto { background: #f57c00; color: white; }
+.btn-cancelar { background: transparent; border: 1px solid #555; color: #ccc; }
+.btn-confirmar { background: #b21420; color: white; }
+.btn-realizada:hover, .btn-no-contesto:hover, .btn-confirmar:hover { opacity: 0.85; }
+.btn-realizada:disabled, .btn-no-contesto:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.estado-badge {
+  padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold;
+}
+.estado-pendiente { background: #fff3cd; color: #856404; }
+.estado-realizada { background: #d4edda; color: #155724; }
+.estado-cancelada { background: #f8d7da; color: #721c24; }
+.estado-no_contesto { background: #ffe0b2; color: #e65100; }
+
+.panel-tabla {
+  width: 100%; border-collapse: collapse;
+  background: #1c1c1f; border-radius: 8px; overflow: hidden;
+}
+.panel-tabla th {
+  background: #252528; padding: 12px; text-align: left;
+  font-size: 13px; color: #888; font-weight: 600;
+}
+.panel-tabla td {
+  padding: 12px; border-top: 1px solid #2a2a2d;
+  font-size: 14px; color: #ccc;
+}
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 1rem;
+}
+.modal-asesor {
+  background: #1c1c1f; border: 1px solid #2a2a2d;
+  border-radius: 10px; padding: 2rem; width: 100%; max-width: 500px;
+}
+.modal-asesor h3 { margin: 0 0 1rem 0; color: #f2f0ee; }
+.modal-asesor p { color: #ccc; margin-bottom: 1rem; }
+.modal-asesor label { display: block; margin: 1rem 0 6px; color: #999; font-size: 13px; }
+.modal-asesor textarea {
+  width: 100%; padding: 10px; background: #141416; border: 1px solid #303034;
+  border-radius: 6px; color: #f2f0ee; font-family: inherit; box-sizing: border-box;
+}
+.modal-asesor-acciones { display: flex; gap: 10px; margin-top: 1.5rem; }
