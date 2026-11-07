@@ -1,137 +1,161 @@
-# CE-Web
+🛠️ CE-Web
+Sistema web integral para la gestión de inventario, alquiler de maquinaria pesada, herramientas y recursos. Desarrollado como proyecto de formación del SENA. La aplicación cuenta con una arquitectura desacoplada (Backend + Frontend), control de acceso basado en roles, automatización de procesos y está contenedorizada con Docker.
 
-Sistema web para la gestión de maquinaria, herramientas y recursos, desarrollado como proyecto de formación del SENA. La aplicación permite administrar información mediante una API REST construida con FastAPI y una interfaz web.
+📌 Características Principales
+Gestión de Inventario: Control de stock automático, alertas de productos agotados y módulo de mantenimiento.
 
-## 📌 Características
+Sistema de Reservas: Cotizaciones por meses con validación de fechas y stock en tiempo real.
 
-- Gestión de maquinaria.
-- Gestión de herramientas.
-- Gestión de usuarios.
-- Operaciones CRUD.
-- API REST con FastAPI.
-- Conexión a base de datos MySQL.
-- Interfaz web desarrollada con HTML, CSS y JavaScript.
+Roles de Usuario: Control de acceso para Clientes, Administradores y Asesores Comerciales.
 
----
+Flujo de Aprobación: Panel administrativo para aprobar/rechazar reservas pendientes.
 
-## 🚀 Tecnologías
+Asignación Automática: Sistema inteligente que asigna asesores a compras superiores a $30.000.000 COP.
 
-### Backend
-- Python
-- FastAPI
+Notificaciones Automáticas: Envío de correos electrónicos para confirmación de reservas, aprobaciones, rechazos y avisos de vencimiento (3 días antes).
 
-### Frontend
-- HTML5
-- CSS3
-- JavaScript
+Auditoría: Triggers en la base de datos para registrar cada movimiento en el sistema.
 
-### Base de Datos
-- Postgres
+Diseño UI/UX: Interfaz moderna, responsiva y adaptable a modo claro/oscuro.
 
-### Herramientas
-- Git
-- GitHub
+Contenedorización: Despliegue rápido del entorno completo mediante Docker.
 
----
+🚀 Tecnologías
+Backend
+Python 3
 
-## 📂 Estructura del proyecto
+FastAPI
 
-```text
-Proyecto-CE-Web/
+SQLAlchemy
+
+Uvicorn
+
+Passlib & Bcrypt (Encriptación de contraseñas)
+
+APScheduler (Tareas programadas en segundo plano)
+
+Frontend
+React.js
+
+Vite
+
+HTML5 / CSS3
+
+JavaScript (ES6+)
+
+Base de Datos
+PostgreSQL (Gestión de datos, triggers, funciones almacenadas y vistas)
+
+Herramientas y Despliegue
+Git & GitHub
+
+Docker & Docker Compose
+
+Swagger UI (Pruebas de API)
+
+📂 Estructura del proyecto
+text
+CE-WEB-PREMIUM/
 │
-├── backend/
-├── frontend/
-├── database/
-├── static/
-├── templates/
-├── requirements.txt
-├── README.md
-└── .gitignore
-```
+├── FAST-API/               # Código del Backend (Python/FastAPI)
+│   ├── config/
+│   ├── model/
+│   ├── schema/
+│   ├── main.py
+│   └── requirements.txt
+│
+├── src/                    # Código del Frontend (React/Vite)
+│   ├── components/
+│   ├── services/
+│   └── App.jsx
+│
+├── DATABASE/               # Scripts SQL (Creación de tablas, funciones, triggers)
+│   └── ce_web_db.sql
+│
+├── docker-compose.yml      # Orquestación de contenedores
+├── Dockerfile              # Configuración de Docker
+├── package.json            # Dependencias del frontend
+└── README.md
+🐳 Ejecución con Docker (Recomendado)
+La forma más rápida de ejecutar el proyecto completo (Base de datos + Backend + Frontend) es usando Docker.
 
----
+Asegúrate de tener instalado Docker y Docker Compose.
 
-## ⚙️ Instalación
+En la raíz del proyecto, ejecuta:
 
-1. Clonar el repositorio.
+bash
+docker-compose up --build
+El sistema estará disponible en:
 
-```bash
+Frontend: http://localhost:3000
+
+Backend API (Swagger): http://localhost:8000/docs
+
+Base de Datos: localhost:5432
+
+Para detener los contenedores:
+
+bash
+docker-compose down
+⚙️ Instalación Manual (Entorno de Desarrollo Local)
+Si prefieres ejecutar el proyecto sin Docker, sigue estos pasos:
+
+1. Clonar el repositorio
+bash
 git clone https://github.com/sanntiagoperez/Proyecto-CE-Web.git
-```
+cd CE-WEB-PREMIUM
+2. Configurar el Backend
+bash
+cd FAST-API
+python -m venv venv
 
-2. Entrar al proyecto.
+# Activar entorno virtual
+# Windows:
+venv\Scripts\activate
+# Linux/macOS:
+source venv/bin/activate
 
-```bash
-cd Proyecto-CE-Web
-```
-
-3. Crear el entorno virtual.
-
-```bash
-python -m venv .venv
-```
-
-4. Activar el entorno virtual.
-
-### Windows
-
-```bash
-.venv\Scripts\activate
-```
-
-### Linux / macOS
-
-```bash
-source .venv/bin/activate
-```
-
-5. Instalar las dependencias.
-
-```bash
+# Instalar dependencias
 pip install -r requirements.txt
-```
+Variables de entorno:
+Crea un archivo .env en la carpeta FAST-API/ con las credenciales de tu base de datos y correo:
 
-6. Ejecutar el servidor.
+env
+DATABASE_URL=postgresql://usuario:password@localhost:5432/ce_web
+GMAIL_USER=tu_correo@gmail.com
+GMAIL_APP_PASSWORD=tu_contraseña_de_aplicacion
+Ejecutar servidor:
 
-```bash
-fastapi dev main.py
-```
-
-o
-
-```bash
+bash
 uvicorn main:app --reload
-```
+3. Configurar el Frontend
+Abre otra terminal en la raíz del proyecto:
 
----
+bash
+npm install
+npm run dev
+🔒 Seguridad
+Las contraseñas se almacenan encriptadas utilizando Bcrypt.
 
-## 🔒 Seguridad
+El acceso a los endpoints y vistas está protegido según el rol del usuario (client, admin, asesor).
 
-Durante el desarrollo el proyecto utiliza **HTTP**, ya que se ejecuta en un entorno local (`localhost`).
+Se implementan variables de entorno para proteger credenciales sensibles.
 
-Para un entorno de producción se recomienda implementar **HTTPS**, ya que:
+En desarrollo se utiliza HTTP (localhost). Para producción se recomienda encarecidamente el uso de HTTPS para cifrar el tráfico y proteger las credenciales.
 
-- Protege la información transmitida.
-- Cifra las credenciales de los usuarios.
-- Aumenta la seguridad de la aplicación.
-- Cumple con las buenas prácticas para aplicaciones web.
+📈 Estado del proyecto
+✅ Completado y funcional (Fase de pruebas finales).
+El sistema cubre el flujo completo desde la visualización del catálogo por parte del cliente, la creación de la reserva, la aprobación administrativa, la asignación de asesores comerciales y la notificación vía email.
 
----
+👨‍💻 Autores
+Joan Santiago Pérez Granados
 
-## 📈 Estado del proyecto
+Julian David Forero Tilagüi
 
-🚧 En desarrollo.
+Emily Mora Silva
 
-Se continúa trabajando en nuevas funcionalidades, mejoras de rendimiento y optimización de la aplicación.
+David Samuel Pérez Culma
 
----
+Lincoln Eduardo Castro Esquivel
 
-## 👨‍💻 Autores
-
-**Joan Santiago Pérez Granados**
-**Julian David Forero Tilagüi**
-**Emily Mora Silva**
-**David Samuel Pérez Culma**
-**Lincoln Eduardo Castro Esquivel**
-
-Proyecto desarrollado como parte de la formación en el **SENA**.
+Proyecto desarrollado como parte de la formación en el SENA.
