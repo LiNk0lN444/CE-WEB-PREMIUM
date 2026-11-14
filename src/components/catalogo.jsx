@@ -150,11 +150,12 @@ export default function Catalogo({ darkMode }) {
 
   function agregarACotizacion(producto) {
     // 🔴 Validar stock
-  if (Number(producto.stock_quantity) <= 0) {
-    setMensajeCotizacion(`"${producto.name}" está agotado. No se puede agregar. 🚫`);
-    setTimeout(() => setMensajeCotizacion(null), 3000);
-    return;
-  }
+const stockDisponible = Number(producto.stock_quantity) || 0;
+if (stockDisponible <= 0) {
+  setMensajeCotizacion(`"${producto.name}" está agotado. No se puede agregar. 🚫`);
+  setTimeout(() => setMensajeCotizacion(null), 3000);
+  return;
+}
     setCarrito((actual) => {
       const existe = actual.find((item) => item.product_id === producto.product_id);
       if (existe) {
