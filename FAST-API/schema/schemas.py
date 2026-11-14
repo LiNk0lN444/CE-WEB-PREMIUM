@@ -361,3 +361,77 @@ class CitaResponse(BaseModel):
 class CitaEstadoUpdate(BaseModel):
     estado: str  # realizada, cancelada, no_contesto
     notas: Optional[str] = None
+
+# ==========================================
+# ASESORES Y CITAS
+# ==========================================
+from datetime import date, time
+from typing import Optional, List
+
+class AsesorCreate(BaseModel):
+    user_id: int
+    nombre_completo: str
+    telefono: Optional[str] = None
+    especialidad: Optional[str] = None
+
+class AsesorResponse(BaseModel):
+    asesor_id: int
+    user_id: int
+    nombre_completo: str
+    telefono: Optional[str] = None
+    especialidad: Optional[str] = None
+    activo: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class HorarioCreate(BaseModel):
+    dia_semana: str
+    hora_inicio: time
+    hora_fin: time
+
+class HorarioResponse(BaseModel):
+    horario_id: int
+    asesor_id: int
+    dia_semana: str
+    hora_inicio: time
+    hora_fin: time
+    activo: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ContratoCreate(BaseModel):
+    fecha_inicio: date
+    fecha_fin: Optional[date] = None
+    salario: float
+    tipo_contrato: str
+    estado: str = "activo"
+
+class ContratoResponse(BaseModel):
+    contrato_id: int
+    asesor_id: int
+    fecha_inicio: date
+    fecha_fin: Optional[date] = None
+    salario: float
+    tipo_contrato: str
+    estado: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CitaResponse(BaseModel):
+    slot_id: int
+    asesor_id: int
+    cotizacion_id: Optional[int] = None
+    fecha: date
+    hora_inicio: time
+    hora_fin: time
+    estado: str
+    cliente_username: Optional[str] = None
+    cliente_email: Optional[str] = None
+    cliente_telefono: Optional[str] = None
+    cotizacion_total: Optional[float] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CitaEstadoUpdate(BaseModel):
+    estado: str
+    notas: Optional[str] = None

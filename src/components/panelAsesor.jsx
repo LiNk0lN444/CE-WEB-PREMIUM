@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import '../assests/css/PanelAsesor.css';
+import '../assests/css/panelAsesor.css';
 import {
   obtenerMisCitas,
   actualizarEstadoCita,
