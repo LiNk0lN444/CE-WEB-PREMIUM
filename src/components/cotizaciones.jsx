@@ -14,8 +14,28 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
 
   const usuarioSesion = JSON.parse(localStorage.getItem('usuario_sesion')) || null;
 
-  // Carrito de la reserva
-  const [carrito, setCarrito] = useState([]);
+  // 1. INICIALIZACIÓN SEGURA DEL CARRITO
+  // Leemos de localStorage y protegemos los datos para que React no explote.
+  const [carrito, setCarrito] = useState(() => {
+    const guardado = localStorage.getItem('carrito_cotizacion');
+    if (!guardado) return [];
+    try {
+      const items = JSON.parse(guardado);
+      // Mapeamos y forzamos que "nombre" y "tipo" sean strings
+      return items.map((item) => ({
+        ...item,
+        tipo: String(item.tipo || item.type || 'General'),
+        nombre: String(item.nombre || item.name || 'Producto'),
+      }));
+    } catch {
+      return []; // Si el JSON está dañado, devolvemos un carrito vacío
+    }
+  });
+
+  // Sincronizar el carrito con el localStorage cada vez que cambie
+  useEffect(() => {
+    localStorage.setItem('carrito_cotizacion', JSON.stringify(carrito));
+  }, [carrito]);
 
   // ═══════════════════════════════════════════
   // PRODUCTOS REALES DESDE EL BACKEND
@@ -48,24 +68,18 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // ═══════════════════════════════════════════
-  // CARGAR PRODUCTOS REALES (una vez al montar)
-  // ═══════════════════════════════════════════
+  // Cargar productos desde la BD
   useEffect(() => {
     async function cargarProductos() {
       try {
         setCargandoItems(true);
-
         const [productos, inventario] = await Promise.all([
           obtenerProductos(),
           obtenerInventario(),
         ]);
 
-        // Combinar productos con inventario (precio + stock)
         const merged = productos.map((p) => {
           const inv = inventario.find((i) => i.product_id === p.product_id);
-
-          // Normalizar tipo: "Maquinaria" → "maquinaria", "Herramienta" → "herramienta"
           const tipoNorm = (p.type || '').toLowerCase().includes('maq')
             ? 'maquinaria'
             : 'herramienta';
@@ -78,7 +92,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
             stock: p.stock_quantity ?? 0,
           };
         });
-
         setItemsDisponibles(merged);
       } catch (err) {
         console.error('Error cargando productos:', err);
@@ -87,11 +100,10 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
         setCargandoItems(false);
       }
     }
-
     cargarProductos();
   }, []);
 
-  // Sincronizar selector cuando cambia el tipo o los productos
+  // Sincronizar selector
   useEffect(() => {
     const filtrados = itemsDisponibles.filter((i) => i.tipo === tipoSeleccionado);
     setItemSeleccionadoId(filtrados.length > 0 ? filtrados[0].id : '');
@@ -117,12 +129,9 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     }
   }
 
-  // ═══════════════════════════════════════════
-  // AGREGAR ÍTEM AL CARRITO (con validación de stock)
-  // ═══════════════════════════════════════════
+  // Agregar al carrito
   const handleAgregarItem = () => {
     setErrorMsg('');
-
     const itemEncontrado = itemsDisponibles.find(
       (i) => i.id === parseInt(itemSeleccionadoId)
     );
@@ -133,25 +142,23 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     }
 
     const cantidadSolicitada = parseInt(cantidadInput) || 1;
-
     if (cantidadSolicitada < 1) {
       setErrorMsg('La cantidad mínima es 1.');
       return;
     }
 
-    // VALIDAR STOCK
     if (itemEncontrado.stock < cantidadSolicitada) {
-    setErrorMsg('No hay suficientes unidades disponibles para esa cantidad. Intenta con menos.');
-    return;
+      setErrorMsg('No hay suficientes unidades disponibles. Intenta con menos.');
+      return;
     }
 
     const nuevoItem = {
       id: Date.now(),
-      tipo: itemEncontrado.tipo,
-      nombre: itemEncontrado.nombre,
+      tipo: String(itemEncontrado.tipo),
+      nombre: String(itemEncontrado.nombre),
       product_id: itemEncontrado.id,
       cantidad: cantidadSolicitada,
-      precioMensual: itemEncontrado.precioMensual,
+      precioMensual: Number(itemEncontrado.precioMensual),
       stockDisponible: itemEncontrado.stock,
     };
 
@@ -163,9 +170,10 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     setCarrito(carrito.filter((item) => item.id !== idItem));
   };
 
-  // Cálculo visual de totales
+  // Cálculo de totales (Protegido con Number para evitar errores si viene vacío)
   const subtotal = carrito.reduce(
-    (acc, item) => acc + item.cantidad * meses * item.precioMensual,
+    (acc, item) =>
+      acc + (Number(item.cantidad) || 1) * meses * (Number(item.precioMensual) || 0),
     0
   );
   const iva = subtotal * 0.19;
@@ -188,9 +196,7 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     });
   };
 
-  // ═══════════════════════════════════════════
-  // GUARDAR LA RESERVA
-  // ═══════════════════════════════════════════
+  // Guardar la reserva
   const handleGuardarReserva = async () => {
     setErrorMsg('');
 
@@ -223,7 +229,7 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
         observations: observaciones,
         items: carrito.map((it) => ({
           product_id: it.product_id,
-          quantity: it.cantidad,
+          quantity: Number(it.cantidad) || 1,
         })),
       };
 
@@ -246,10 +252,7 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     setErrorMsg('');
   };
 
-  // Items filtrados por tipo (para el selector)
   const itemsFiltrados = itemsDisponibles.filter((i) => i.tipo === tipoSeleccionado);
-
-  // Ítem seleccionado actualmente (para mostrar su stock)
   const itemActual = itemsDisponibles.find((i) => i.id === parseInt(itemSeleccionadoId));
 
   return (
@@ -278,9 +281,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
             </button>
           </nav>
 
-          {/* ═══════════════════════════════════════
-              TAB NUEVA COTIZACIÓN
-          ═══════════════════════════════════════ */}
           {tabActiva === 'nueva' && (
             <section className="cot-tab-panel active">
               <div className="cot-bloque">
@@ -296,7 +296,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                 )}
               </div>
 
-              {/* Fechas y duración */}
               <div className="cot-bloque">
                 <h2>Fechas y Duración</h2>
                 <div className="cot-selector-grid">
@@ -331,7 +330,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                 </p>
               </div>
 
-              {/* Agregar ítems */}
               <div className="cot-bloque">
                 <h2>Agregar ítems</h2>
                 <div className="cot-selector-grid">
@@ -355,23 +353,17 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                       onChange={(e) => setItemSeleccionadoId(e.target.value)}
                       disabled={cargandoItems || itemsFiltrados.length === 0}
                     >
-                      {cargandoItems && (
-                        <option value="">Cargando productos...</option>
-                      )}
-
+                      {cargandoItems && <option value="">Cargando productos...</option>}
                       {!cargandoItems && itemsFiltrados.length === 0 && (
-                        <option value="">
-                          Sin {tipoSeleccionado === 'maquinaria' ? 'maquinaria' : 'herramientas'} disponibles
-                        </option>
+                        <option value="">Sin {tipoSeleccionado === 'maquinaria' ? 'maquinaria' : 'herramientas'} disponibles</option>
                       )}
-
                       {!cargandoItems &&
-                      itemsFiltrados.map((i) => (
-                      <option key={i.id} value={i.id}>
-                      {i.nombre} — {formatoMoneda(i.precioMensual)}/mes
-                      </option>
-                      ))}
-                      </select>
+                        itemsFiltrados.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.nombre} — {formatoMoneda(i.precioMensual)}/mes
+                          </option>
+                        ))}
+                    </select>
                   </div>
 
                   <div className="cot-form-group">
@@ -380,7 +372,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                       type="number"
                       id="itemCantidad"
                       min="1"
-                      
                       value={cantidadInput}
                       onChange={(e) => setCantidadInput(e.target.value)}
                     />
@@ -398,7 +389,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                 </div>
               </div>
 
-              {/* Tabla de ítems */}
               <div className="cot-bloque">
                 <h2>Ítems de la cotización</h2>
                 <div className="cot-lista-wrap">
@@ -415,35 +405,30 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {carrito.map((item) => (
-                        <tr key={item.id}>
-                          <td style={{ textTransform: 'capitalize' }}>{item.tipo}</td>
-                          <td><strong>{item.nombre}</strong></td>
-                          <td>{item.cantidad}</td>
-                          <td>{meses}</td>
-                          <td>{formatoMoneda(item.precioMensual)}</td>
-                          <td>
-                            <strong>
-                              {formatoMoneda(item.cantidad * meses * item.precioMensual)}
-                            </strong>
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              style={{
-                                color: '#c62828',
-                                border: 'none',
-                                background: 'none',
-                                cursor: 'pointer',
-                                fontWeight: 'bold',
-                              }}
-                              onClick={() => handleEliminarItem(item.id)}
-                            >
-                              ✕ Eliminar
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {carrito.map((item) => {
+                        const precioFinal = Number(item.precioMensual || item.valorUnitario || 0);
+                        const cant = Number(item.cantidad) || 1;
+                        const mes = Number(item.meses) || 1;
+                        return (
+                          <tr key={item.id}>
+                            <td style={{ textTransform: 'capitalize' }}>{String(item.tipo || 'General')}</td>
+                            <td><strong>{String(item.nombre || 'Producto')}</strong></td>
+                            <td>{cant}</td>
+                            <td>{mes}</td>
+                            <td>{formatoMoneda(precioFinal)}</td>
+                            <td><strong>{formatoMoneda(cant * mes * precioFinal)}</strong></td>
+                            <td>
+                              <button
+                                type="button"
+                                style={{ color: '#c62828', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                onClick={() => handleEliminarItem(item.id)}
+                              >
+                                ✕ Eliminar
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
 
@@ -454,7 +439,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                   )}
                 </div>
 
-                {/* Totales */}
                 <div className="cot-totales" style={{ marginTop: '1.5rem' }}>
                   <div className="cot-totales-fila">
                     <span>Subtotal</span>
@@ -464,22 +448,13 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                     <span>IVA (19%)</span>
                     <span>{formatoMoneda(iva)}</span>
                   </div>
-                  <div
-                    className="cot-totales-fila cot-total-final"
-                    style={{
-                      fontSize: '1.2rem',
-                      fontWeight: 'bold',
-                      borderTop: '2px solid #ccc',
-                      paddingTop: '8px',
-                    }}
-                  >
+                  <div className="cot-totales-fila cot-total-final" style={{ fontSize: '1.2rem', fontWeight: 'bold', borderTop: '2px solid #ccc', paddingTop: '8px' }}>
                     <span>Total</span>
                     <span style={{ color: '#2e7d32' }}>{formatoMoneda(total)}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Observaciones y botones */}
               <div className="cot-bloque">
                 <h2>Observaciones</h2>
                 <div className="cot-form-grid">
@@ -496,9 +471,7 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                 </div>
 
                 {errorMsg && (
-                  <p style={{ color: '#ff5252', marginTop: '10px', fontWeight: 'bold' }}>
-                    {errorMsg}
-                  </p>
+                  <p style={{ color: '#ff5252', marginTop: '10px', fontWeight: 'bold' }}>{errorMsg}</p>
                 )}
 
                 <div className="cot-form-actions" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
@@ -513,9 +486,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
             </section>
           )}
 
-          {/* ═══════════════════════════════════════
-              TAB MIS COTIZACIONES
-          ═══════════════════════════════════════ */}
           {tabActiva === 'listado' && (
             <section className="cot-tab-panel active">
               <div className="cot-bloque">
@@ -550,9 +520,7 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                             <td>{formatoFecha(r.end_date)}</td>
                             <td>{r.months || '—'}</td>
                             <td><strong>{formatoMoneda(r.total_price)}</strong></td>
-                            <td>
-                              <EstadoBadge estado={r.status} />
-                            </td>
+                            <td><EstadoBadge estado={r.status} /></td>
                           </tr>
                         ))}
                       </tbody>
@@ -574,9 +542,6 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
   );
 }
 
-// ==========================================
-// Componente auxiliar: Badge de estado
-// ==========================================
 function EstadoBadge({ estado }) {
   const colores = {
     pending: { bg: '#fff3cd', color: '#856404', label: 'PENDIENTE' },
@@ -588,16 +553,7 @@ function EstadoBadge({ estado }) {
   };
   const c = colores[estado] || colores.pending;
   return (
-    <span
-      style={{
-        padding: '4px 10px',
-        borderRadius: '4px',
-        backgroundColor: c.bg,
-        color: c.color,
-        fontWeight: 'bold',
-        fontSize: '12px',
-      }}
-    >
+    <span style={{ padding: '4px 10px', borderRadius: '4px', backgroundColor: c.bg, color: c.color, fontWeight: 'bold', fontSize: '12px' }}>
       {c.label}
     </span>
   );
