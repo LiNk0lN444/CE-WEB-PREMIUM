@@ -1,54 +1,38 @@
-import json
+import smtplib
 import os
-import urllib.error
-import urllib.request
-
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-MAIL_FROM = os.getenv("MAIL_FROM", "CE-Web <onboarding@resend.dev>")
-
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 def enviar_correo(destinatario: str, asunto: str, cuerpo_html: str) -> bool:
-    """
-    Envía un correo vía HTTPS (Resend API) para evitar bloqueos SMTP en Railway.
-    Devuelve True si se envió correctamente, False si falló.
-    """
-    if not RESEND_API_KEY:
-        print("Falta la variable de entorno RESEND_API_KEY")
+    remitente = os.getenv("GMAIL_USER")
+    password = os.getenv("GMAIL_APP_PASSWORD")
+
+    if not remitente or not password:
+        print("⚠️ Faltan credenciales de Gmail en variables de entorno.")
         return False
 
-    payload = json.dumps({
-        "from": MAIL_FROM,
-        "to": [destinatario],
-        "subject": asunto,
-        "html": cuerpo_html,
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json",
-            "User-Agent": "CE-Web-Backend/1.0",
-        },
-        method="POST",
-    )
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = asunto
+    msg["From"] = f"Cimentaciones y Estructuras CE-Web <{remitente}>"
+    msg["To"] = destinatario
+    
+    parte_html = MIMEText(cuerpo_html, "html")
+    msg.attach(parte_html)
 
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return 200 <= resp.status < 300
-    except urllib.error.HTTPError as err:
-        detalle = err.read().decode("utf-8", errors="ignore")
-        print(f"Error HTTP enviando correo ({err.code}): {detalle}")
+        # 🔥 EL TIMEOUT ES LA CLAVE PARA QUE NO SE CUELGUE RAILWAY
+        context = smtplib.ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=10) as servidor:
+            servidor.login(remitente, password)
+            servidor.sendmail(remitente, destinatario, msg.as_string())
+        print(f"✅ Correo enviado a {destinatario}")
+        return True
+    except Exception as e:
+        print(f"❌ Error enviando correo: {e}")
         return False
-    except Exception as err:
-        print(f"Error enviando correo: {err}")
-        return False
-
 
 def cuerpo_confirmacion_cotizacion(nombre_cliente: str, numero_cotizacion: str, total_valor) -> tuple[str, str]:
     MONTO_LIMITE = 30000000.0
-
     try:
         valor_numerico = float(total_valor)
         total_formateado = f"${valor_numerico:,.0f}"
@@ -63,12 +47,10 @@ def cuerpo_confirmacion_cotizacion(nombre_cliente: str, numero_cotizacion: str, 
           <body>
             <h2>¡Hola {nombre_cliente}!</h2>
             <p>Tu solicitud de cotización <strong>{numero_cotizacion}</strong> por un valor total de <strong>{total_formateado} COP</strong> supera el límite de aprobación automática.</p>
-            <p style="color: #d32f2f; font-weight: bold;">Por motivos de seguridad y políticas de crédito de CE-Web, esta orden requiere validación humana.</p>
-            <p>Por favor, <strong>comuníquese directamente con nuestra asesora comercial Emily Mora Silva</strong> para procesar y autorizar tu solicitud.</p>
-            <br>
-            <p>Correo de contacto: <a href="mailto:emily.mora@ce-web.com">emily.mora@ce-web.com</a></p>
-            <p>Teléfono de contacto: <a href="tel:+573058247819">+57 305 824 7819</a></p>
-            <p>Gracias por confiar en Cimentaciones y Estructuras CE-Web.</p>
+            <p style="color: #d32f2f; font-weight: bold;">Por motivos de seguridad, esta orden requiere validación humana.</p>
+            <p>Por favor, <strong>comuníquese directamente con nuestra asesora comercial Emily Mora Silva</strong>.</p>
+            <p>Correo: <a href="mailto:emily.mora@ce-web.com">emily.mora@ce-web.com</a></p>
+            <p>Teléfono: <a href="tel:+573058247819">+57 305 824 7819</a></p>
           </body>
         </html>
         """
@@ -80,12 +62,8 @@ def cuerpo_confirmacion_cotizacion(nombre_cliente: str, numero_cotizacion: str, 
             <h2>¡Hola {nombre_cliente}!</h2>
             <p>Tu cotización <strong>{numero_cotizacion}</strong> ha sido generada exitosamente.</p>
             <p><strong>Total:</strong> {total_formateado} COP</p>
-            <p>Sigue disfrutando de nuestros servicios.</p>
-            <br>
-            <p>Gracias por confiar en nosotros.</p>
-            <p>Cimentaciones y Estructuras CE-Web</p>
+            <p>Gracias por confiar en Cimentaciones y Estructuras CE-Web.</p>
           </body>
         </html>
         """
-
     return asunto, cuerpo_html
