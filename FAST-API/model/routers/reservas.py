@@ -1,19 +1,36 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from config.database import get_db
+from model.utils.email_utils import enviar_correo
 from schema import schemas
 
 router = APIRouter(prefix="/reservas", tags=["Reservas"])
+
+
+def _enviar_correo_seguro(destinatario: str, asunto: str, cuerpo: str, etiqueta: str = "correo") -> None:
+    """Ejecuta el envío de correo en segundo plano sin romper ni bloquear la respuesta HTTP."""
+    try:
+        enviado = enviar_correo(destinatario, asunto, cuerpo)
+        if enviado:
+            print(f"📧 [{etiqueta}] enviado a {destinatario}")
+        else:
+            print(f"⚠️ [{etiqueta}] NO enviado a {destinatario}")
+    except Exception as e:
+        print(f"❌ Error enviando [{etiqueta}] a {destinatario}: {e}")
 
 
 # ============================================================
 # CREAR RESERVA (cliente) — por MESES + Email de confirmación
 # ============================================================
 @router.post("/", response_model=schemas.ReservaResponse)
-def crear_reserva(datos: schemas.ReservaCreate, db: Session = Depends(get_db)):
+def crear_reserva(
+    datos: schemas.ReservaCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     if datos.months < 1:
         raise HTTPException(status_code=400, detail="La reserva mínima es de 1 mes")
 
@@ -45,10 +62,8 @@ def crear_reserva(datos: schemas.ReservaCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=resultado.mensaje)
 
     # ─────────────────────────────────────────────
-    # 📧 Email de confirmación al cliente
+    # 📧 Preparar y encolar emails en segundo plano
     # ─────────────────────────────────────────────
-    from model.utils.email_utils import enviar_correo
-
     cliente = db.execute(
         text("SELECT username, email FROM Users WHERE user_id = :uid"),
         {"uid": datos.user_id},
@@ -56,7 +71,6 @@ def crear_reserva(datos: schemas.ReservaCreate, db: Session = Depends(get_db)):
 
     if cliente and cliente.email:
         try:
-            # ¿Requiere asesor? (>30M)
             cot_info = db.execute(
                 text("""
                     SELECT total_price, requiere_asesor
@@ -66,7 +80,6 @@ def crear_reserva(datos: schemas.ReservaCreate, db: Session = Depends(get_db)):
             ).fetchone()
 
             if cot_info and cot_info.requiere_asesor:
-                # Email especial: requiere asesor
                 asesor_info = db.execute(
                     text("""
                         SELECT u.username, u.email, u.phone_number,
@@ -114,10 +127,14 @@ def crear_reserva(datos: schemas.ReservaCreate, db: Session = Depends(get_db)):
                 </html>
                 """
 
-                enviar_correo(cliente.email, asunto, cuerpo)
-                print(f"📧 Email de asesoría enviado a {cliente.email}")
+                background_tasks.add_task(
+                    _enviar_correo_seguro,
+                    cliente.email,
+                    asunto,
+                    cuerpo,
+                    "Email de asesoría",
+                )
 
-                # 📧 Email al asesor
                 if asesor_info and asesor_info.email:
                     asunto_asesor = f"📞 Nueva cita: COT-{resultado.cotizacion_id}"
                     cuerpo_asesor = f"""
@@ -136,11 +153,14 @@ def crear_reserva(datos: schemas.ReservaCreate, db: Session = Depends(get_db)):
                       </body>
                     </html>
                     """
-                    enviar_correo(asesor_info.email, asunto_asesor, cuerpo_asesor)
-                    print(f"📧 Email de cita enviado al asesor {asesor_info.email}")
-
+                    background_tasks.add_task(
+                        _enviar_correo_seguro,
+                        asesor_info.email,
+                        asunto_asesor,
+                        cuerpo_asesor,
+                        "Email de cita al asesor",
+                    )
             else:
-                # Email normal (reserva <30M)
                 asunto = f"📋 Reserva COT-{resultado.cotizacion_id} recibida"
                 cuerpo = f"""
                 <html>
@@ -155,10 +175,16 @@ def crear_reserva(datos: schemas.ReservaCreate, db: Session = Depends(get_db)):
                   </body>
                 </html>
                 """
-                enviar_correo(cliente.email, asunto, cuerpo)
+                background_tasks.add_task(
+                    _enviar_correo_seguro,
+                    cliente.email,
+                    asunto,
+                    cuerpo,
+                    "Email de confirmación de reserva",
+                )
 
         except Exception as e:
-            print(f"❌ Error enviando emails: {e}")
+            print(f"❌ Error preparando emails en crear_reserva: {e}")
 
     return schemas.ReservaResponse(
         cotizacion_id=resultado.cotizacion_id,
@@ -268,13 +294,11 @@ def listar_por_vencer(db: Session = Depends(get_db)):
 def aprobar_reserva(
     cotizacion_id: int,
     datos: schemas.AprobarReserva,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Aprueba una reserva y envía email de confirmación al cliente."""
+    """Aprueba una reserva y encola el email de confirmación al cliente."""
 
-    # ─────────────────────────────────────────────
-    # 1. Datos de la reserva (para el email)
-    # ─────────────────────────────────────────────
     info = db.execute(
         text("""
             SELECT
@@ -291,78 +315,68 @@ def aprobar_reserva(
         {"cid": cotizacion_id},
     ).fetchone()
 
-    # ─────────────────────────────────────────────
-    # 2. Aprobar en la BD (descuenta stock)
-    # ─────────────────────────────────────────────
     resultado = db.execute(
-        text("SELECT fn_aprobar_reserva(:cid, :aid) AS msg"),
-        {"cid": cotizacion_id, "aid": datos.admin_id},
+        text("SELECT fn_aprobar_reserva(CAST(:cid AS INTEGER), CAST(:aid AS INTEGER)) AS msg"),
+        {"cid": int(cotizacion_id), "aid": int(datos.admin_id)},
     ).fetchone()
     db.commit()
 
     if "aprobada" not in resultado.msg.lower():
         raise HTTPException(status_code=400, detail=resultado.msg)
 
-    # ─────────────────────────────────────────────
-    # 3. Email al cliente
-    # ─────────────────────────────────────────────
     if info and info.cliente_email:
-        try:
-            from model.utils.email_utils import enviar_correo
+        asunto = f"✅ Reserva COT-{cotizacion_id} aprobada"
+        cuerpo = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; padding: 30px;">
+              <h2 style="color: #2e7d32;">✅ ¡Tu reserva fue aprobada!</h2>
 
-            asunto = f"✅ Reserva COT-{cotizacion_id} aprobada"
-            cuerpo = f"""
-            <html>
-              <body style="font-family: Arial, sans-serif; padding: 20px;">
-                <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; padding: 30px;">
-                  <h2 style="color: #2e7d32;">✅ ¡Tu reserva fue aprobada!</h2>
+              <p>Hola <strong>{info.username}</strong>,</p>
 
-                  <p>Hola <strong>{info.username}</strong>,</p>
+              <p>Tu reserva ha sido aprobada por un administrador. Aquí los detalles:</p>
 
-                  <p>Tu reserva ha sido aprobada por un administrador. Aquí los detalles:</p>
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Número:</td>
+                  <td style="padding: 8px 0;"><strong>COT-{cotizacion_id}</strong></td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Fecha de inicio:</td>
+                  <td style="padding: 8px 0;"><strong>{info.start_date}</strong></td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Fecha de fin:</td>
+                  <td style="padding: 8px 0;"><strong>{info.end_date}</strong></td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Total:</td>
+                  <td style="padding: 8px 0;"><strong>${float(info.total_price):,.0f} COP</strong></td>
+                </tr>
+              </table>
 
-                  <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;">Número:</td>
-                      <td style="padding: 8px 0;"><strong>COT-{cotizacion_id}</strong></td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;">Fecha de inicio:</td>
-                      <td style="padding: 8px 0;"><strong>{info.start_date}</strong></td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;">Fecha de fin:</td>
-                      <td style="padding: 8px 0;"><strong>{info.end_date}</strong></td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;">Total:</td>
-                      <td style="padding: 8px 0;"><strong>${float(info.total_price):,.0f} COP</strong></td>
-                    </tr>
-                  </table>
+              <p>Puedes pasar a retirar tu maquinaria o herramienta en la fecha acordada.</p>
 
-                  <p>Puedes pasar a retirar tu maquinaria o herramienta en la fecha acordada.</p>
+              <p style="color: #888; font-size: 13px;">
+                Recuerda que 3 días antes del vencimiento te avisaremos para coordinar la devolución.
+              </p>
 
-                  <p style="color: #888; font-size: 13px;">
-                    Recuerda que 3 días antes del vencimiento te avisaremos para coordinar la devolución.
-                  </p>
+              <hr style="border: none; border-top: 1px solid #ddd; margin: 25px 0;">
+              <p style="color: #999; font-size: 12px; text-align: center;">
+                Cimentaciones y Estructuras CE-Web
+              </p>
+            </div>
+          </body>
+        </html>
+        """
 
-                  <hr style="border: none; border-top: 1px solid #ddd; margin: 25px 0;">
-                  <p style="color: #999; font-size: 12px; text-align: center;">
-                    Cimentaciones y Estructuras CE-Web
-                  </p>
-                </div>
-              </body>
-            </html>
-            """
-
-            enviado = enviar_correo(info.cliente_email, asunto, cuerpo)
-            if enviado:
-                print(f"📧 Email de aprobación enviado a {info.cliente_email}")
-            else:
-                print(f"⚠️ Email de aprobación NO enviado a {info.cliente_email}")
-
-        except Exception as e:
-            print(f"❌ Error enviando email de aprobación: {e}")
+        background_tasks.add_task(
+            _enviar_correo_seguro,
+            info.cliente_email,
+            asunto,
+            cuerpo,
+            "Email de aprobación",
+        )
 
     return {"mensaje": resultado.msg}
 
@@ -374,11 +388,11 @@ def aprobar_reserva(
 def rechazar_reserva(
     cotizacion_id: int,
     datos: schemas.RechazarReserva,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Rechaza una reserva y envía email al cliente con el motivo."""
+    """Rechaza una reserva y encola el email al cliente con el motivo."""
 
-    # Datos para el email
     info = db.execute(
         text("""
             SELECT
@@ -392,7 +406,6 @@ def rechazar_reserva(
         {"cid": cotizacion_id},
     ).fetchone()
 
-    # Rechazar en la BD
     resultado = db.execute(
         text("SELECT fn_rechazar_reserva(:cid, :aid, :motivo) AS msg"),
         {
@@ -406,46 +419,41 @@ def rechazar_reserva(
     if "rechazada" not in resultado.msg.lower():
         raise HTTPException(status_code=400, detail=resultado.msg)
 
-    # Email al cliente
     if info and info.cliente_email:
-        try:
-            from model.utils.email_utils import enviar_correo
+        asunto = f"❌ Reserva COT-{cotizacion_id} rechazada"
+        cuerpo = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; padding: 30px;">
+              <h2 style="color: #d32f2f;">❌ Reserva rechazada</h2>
 
-            asunto = f"❌ Reserva COT-{cotizacion_id} rechazada"
-            cuerpo = f"""
-            <html>
-              <body style="font-family: Arial, sans-serif; padding: 20px;">
-                <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; padding: 30px;">
-                  <h2 style="color: #d32f2f;">❌ Reserva rechazada</h2>
+              <p>Hola <strong>{info.username}</strong>,</p>
 
-                  <p>Hola <strong>{info.username}</strong>,</p>
+              <p>Lamentablemente tu reserva <strong>COT-{cotizacion_id}</strong> no pudo ser aprobada.</p>
 
-                  <p>Lamentablemente tu reserva <strong>COT-{cotizacion_id}</strong> no pudo ser aprobada.</p>
+              <p><strong>Motivo:</strong></p>
+              <p style="background: #fff; border-left: 3px solid #d32f2f; padding: 10px 15px; font-style: italic;">
+                "{datos.motivo}"
+              </p>
 
-                  <p><strong>Motivo:</strong></p>
-                  <p style="background: #fff; border-left: 3px solid #d32f2f; padding: 10px 15px; font-style: italic;">
-                    "{datos.motivo}"
-                  </p>
+              <p>Puedes intentar con otras fechas u otro equipo. Si tienes dudas, contáctanos.</p>
 
-                  <p>Puedes intentar con otras fechas u otro equipo. Si tienes dudas, contáctanos.</p>
+              <hr style="border: none; border-top: 1px solid #ddd; margin: 25px 0;">
+              <p style="color: #999; font-size: 12px; text-align: center;">
+                Cimentaciones y Estructuras CE-Web
+              </p>
+            </div>
+          </body>
+        </html>
+        """
 
-                  <hr style="border: none; border-top: 1px solid #ddd; margin: 25px 0;">
-                  <p style="color: #999; font-size: 12px; text-align: center;">
-                    Cimentaciones y Estructuras CE-Web
-                  </p>
-                </div>
-              </body>
-            </html>
-            """
-
-            enviado = enviar_correo(info.cliente_email, asunto, cuerpo)
-            if enviado:
-                print(f"📧 Email de rechazo enviado a {info.cliente_email}")
-            else:
-                print(f"⚠️ Email de rechazo NO enviado a {info.cliente_email}")
-
-        except Exception as e:
-            print(f"❌ Error enviando email de rechazo: {e}")
+        background_tasks.add_task(
+            _enviar_correo_seguro,
+            info.cliente_email,
+            asunto,
+            cuerpo,
+            "Email de rechazo",
+        )
 
     return {"mensaje": resultado.msg}
 
@@ -512,7 +520,8 @@ def ejecutar_tarea_diaria_manual():
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error en tarea diaria: {str(e)}")
 
-    # ============================================================
+
+# ============================================================
 # RESERVAS EN CURSO (admin) — approved y active
 # ============================================================
 @router.get("/en-curso", response_model=list[schemas.ReservaDetalle])
