@@ -1,62 +1,48 @@
+import json
 import os
-import smtplib
-import socket
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import urllib.error
+import urllib.request
 
-GMAIL_USER = os.getenv("GMAIL_USER")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
-
-
-def _resolver_ipv4(host: str, port: int) -> str:
-    """Obtiene una dirección IPv4 explícita para evitar [Errno 101] Network is unreachable en IPv6."""
-    infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-    if not infos:
-        raise OSError(f"No se pudo resolver IPv4 para {host}:{port}")
-    return infos[0][4][0]
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+MAIL_FROM = os.getenv("MAIL_FROM", "CE-Web <onboarding@resend.dev>")
 
 
 def enviar_correo(destinatario: str, asunto: str, cuerpo_html: str) -> bool:
     """
-    Envía un correo usando Gmail SMTP forzando IPv4 con contraseña de aplicación.
-    Intenta primero SSL (puerto 465) y, si falla, STARTTLS (puerto 587).
+    Envía un correo vía HTTPS (Resend API) para evitar bloqueos SMTP en Railway.
     Devuelve True si se envió correctamente, False si falló.
     """
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        print("Faltan las variables de entorno GMAIL_USER o GMAIL_APP_PASSWORD")
+    if not RESEND_API_KEY:
+        print("Falta la variable de entorno RESEND_API_KEY")
         return False
 
-    mensaje = MIMEMultipart("alternative")
-    mensaje["Subject"] = asunto
-    mensaje["From"] = GMAIL_USER
-    mensaje["To"] = destinatario
-    mensaje.attach(MIMEText(cuerpo_html, "html"))
+    payload = json.dumps({
+        "from": MAIL_FROM,
+        "to": [destinatario],
+        "subject": asunto,
+        "html": cuerpo_html,
+    }).encode("utf-8")
 
-    host = "smtp.gmail.com"
-    timeout = 15
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "CE-Web-Backend/1.0",
+        },
+        method="POST",
+    )
 
-    # Intento 1: SMTP_SSL en puerto 465 sobre IPv4
     try:
-        ip_465 = _resolver_ipv4(host, 465)
-        with smtplib.SMTP_SSL(ip_465, 465, timeout=timeout) as servidor:
-            servidor.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-            servidor.sendmail(GMAIL_USER, destinatario, mensaje.as_string())
-        return True
-    except Exception as err_465:
-        print(f"Error enviando correo por puerto 465 (SSL/IPv4): {err_465}")
-
-    # Intento 2: SMTP + STARTTLS en puerto 587 sobre IPv4
-    try:
-        ip_587 = _resolver_ipv4(host, 587)
-        with smtplib.SMTP(ip_587, 587, timeout=timeout) as servidor:
-            servidor.ehlo()
-            servidor.starttls()
-            servidor.ehlo()
-            servidor.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-            servidor.sendmail(GMAIL_USER, destinatario, mensaje.as_string())
-        return True
-    except Exception as err_587:
-        print(f"Error enviando correo por puerto 587 (STARTTLS/IPv4): {err_587}")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return 200 <= resp.status < 300
+    except urllib.error.HTTPError as err:
+        detalle = err.read().decode("utf-8", errors="ignore")
+        print(f"Error HTTP enviando correo ({err.code}): {detalle}")
+        return False
+    except Exception as err:
+        print(f"Error enviando correo: {err}")
         return False
 
 
