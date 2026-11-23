@@ -15,24 +15,22 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
   const usuarioSesion = JSON.parse(localStorage.getItem('usuario_sesion')) || null;
 
   // 1. INICIALIZACIÓN SEGURA DEL CARRITO
-  // Leemos de localStorage y protegemos los datos para que React no explote.
   const [carrito, setCarrito] = useState(() => {
     const guardado = localStorage.getItem('carrito_cotizacion');
     if (!guardado) return [];
     try {
       const items = JSON.parse(guardado);
-      // Mapeamos y forzamos que "nombre" y "tipo" sean strings
       return items.map((item) => ({
         ...item,
         tipo: String(item.tipo || item.type || 'General'),
         nombre: String(item.nombre || item.name || 'Producto'),
       }));
     } catch {
-      return []; // Si el JSON está dañado, devolvemos un carrito vacío
+      return [];
     }
   });
 
-  // Sincronizar el carrito con el localStorage cada vez que cambie
+  // Sincronizar el carrito con el localStorage
   useEffect(() => {
     localStorage.setItem('carrito_cotizacion', JSON.stringify(carrito));
   }, [carrito]);
@@ -56,6 +54,9 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
   // Observaciones y error
   const [observaciones, setObservaciones] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  
+  // 🔥 ESTADO NUEVO: Evita doble clic en el botón de guardar
+  const [guardando, setGuardando] = useState(false);
 
   // Mis reservas
   const [misReservas, setMisReservas] = useState([]);
@@ -170,7 +171,7 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     setCarrito(carrito.filter((item) => item.id !== idItem));
   };
 
-  // Cálculo de totales (Protegido con Number para evitar errores si viene vacío)
+  // Cálculo de totales
   const subtotal = carrito.reduce(
     (acc, item) =>
       acc + (Number(item.cantidad) || 1) * meses * (Number(item.precioMensual) || 0),
@@ -200,6 +201,9 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
   const handleGuardarReserva = async () => {
     setErrorMsg('');
 
+    // 🔥 Evitar doble clic
+    if (guardando) return;
+
     if (carrito.length === 0) {
       setErrorMsg('Debes agregar al menos un ítem a la reserva.');
       return;
@@ -222,6 +226,9 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
     }
 
     try {
+      // 🔥 Bloqueamos el botón
+      setGuardando(true);
+
       const payload = {
         user_id: usuarioSesion.user_id,
         start_date: fechaInicio,
@@ -243,6 +250,9 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
       setTabActiva('listado');
     } catch (err) {
       setErrorMsg(err.message || 'No fue posible crear la reserva.');
+    } finally {
+      // 🔥 Desbloqueamos el botón pase lo que pase
+      setGuardando(false);
     }
   };
 
@@ -475,9 +485,18 @@ export default function Cotizaciones({ darkMode, onNavigateLogin }) {
                 )}
 
                 <div className="cot-form-actions" style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
-                  <button type="button" className="cot-btn" onClick={handleGuardarReserva}>
-                    📅 Solicitar cotización
+                  
+                  {/* 🔥 BOTÓN ACTUALIZADO */}
+                  <button 
+                    type="button" 
+                    className="cot-btn" 
+                    onClick={handleGuardarReserva}
+                    disabled={guardando}
+                    style={{ opacity: guardando ? 0.7 : 1, cursor: guardando ? 'wait' : 'pointer' }}
+                  >
+                    {guardando ? '⏳ Procesando...' : '📅 Solicitar cotización'}
                   </button>
+
                   <button type="button" className="cot-btn-secundario" onClick={handleLimpiarTodo}>
                     🗑️ Limpiar todo
                   </button>
