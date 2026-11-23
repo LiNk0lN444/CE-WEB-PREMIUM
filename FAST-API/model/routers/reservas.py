@@ -9,6 +9,8 @@ from schema import schemas
 
 router = APIRouter(prefix="/reservas", tags=["Reservas"])
 
+UMBRAL_ASESOR_COP = 30_000_000.0
+
 
 def _enviar_correo_seguro(destinatario: str, asunto: str, cuerpo: str, etiqueta: str = "correo") -> None:
     """Ejecuta el envío de correo en segundo plano sin romper ni bloquear la respuesta HTTP."""
@@ -73,13 +75,16 @@ def crear_reserva(
         try:
             cot_info = db.execute(
                 text("""
-                    SELECT total_price, requiere_asesor
+                    SELECT total_price
                     FROM cotizaciones WHERE cotizacion_id = :cid
                 """),
                 {"cid": resultado.cotizacion_id},
             ).fetchone()
 
-            if cot_info and cot_info.requiere_asesor:
+            monto_total = float(cot_info.total_price) if cot_info and cot_info.total_price is not None else float(resultado.total)
+            requiere_asesor = monto_total > UMBRAL_ASESOR_COP
+
+            if requiere_asesor:
                 asesor_info = db.execute(
                     text("""
                         SELECT u.username, u.email, u.phone_number,
@@ -145,7 +150,7 @@ def crear_reserva(
                         <ul>
                           <li><strong>Cotización:</strong> COT-{resultado.cotizacion_id}</li>
                           <li><strong>Cliente:</strong> {cliente.username} ({cliente.email})</li>
-                          <li><strong>Total:</strong> ${float(cot_info.total_price):,.0f} COP</li>
+                          <li><strong>Total:</strong> ${monto_total:,.0f} COP</li>
                           <li><strong>Fecha:</strong> {asesor_info.fecha}</li>
                           <li><strong>Hora:</strong> {asesor_info.hora_inicio} - {asesor_info.hora_fin}</li>
                         </ul>
