@@ -3,14 +3,18 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from config.database import get_db
-from model.utils.email_utils import enviar_correo
+# 🔥 IMPORTANTE: Agregamos SessionLocal y la nueva función de email
+from config.database import get_db, SessionLocal
+from model.utils.email_utils import enviar_correo, cuerpo_confirmacion_cotizacion
 from schema import schemas
 
 router = APIRouter(prefix="/reservas", tags=["Reservas"])
 
 UMBRAL_ASESOR_COP = 30_000_000.0
 
+# ============================================================
+# FUNCIONES EN SEGUNDO PLANO (Background Tasks)
+# ============================================================
 
 def _enviar_correo_seguro(destinatario: str, asunto: str, cuerpo: str, etiqueta: str = "correo") -> None:
     """Ejecuta el envío de correo en segundo plano sin romper ni bloquear la respuesta HTTP."""
@@ -23,6 +27,68 @@ def _enviar_correo_seguro(destinatario: str, asunto: str, cuerpo: str, etiqueta:
     except Exception as e:
         print(f"❌ Error enviando [{etiqueta}] a {destinatario}: {e}")
 
+def _procesar_correos_creacion(cotizacion_id: int, user_id: int, total: float):
+    """Tarea en background que consulta la BD y envía los correos de creación."""
+    db = SessionLocal()
+    try:
+        cliente = db.execute(
+            text("SELECT username, email FROM Users WHERE user_id = :uid"),
+            {"uid": user_id},
+        ).fetchone()
+
+        if not cliente or not cliente.email:
+            return
+
+        # 1. Correo de confirmación / asesoría (Usa tu función de email_utils)
+        asunto, cuerpo = cuerpo_confirmacion_cotizacion(
+            nombre_cliente=cliente.username,
+            numero_cotizacion=f"COT-{cotizacion_id}",
+            total_valor=total
+        )
+        _enviar_correo_seguro(cliente.email, asunto, cuerpo, "Email de confirmación al cliente")
+
+        # 2. Lógica del Asesor (si supera los 30M)
+        if total > UMBRAL_ASESOR_COP:
+            try:
+                asesor_info = db.execute(
+                    text("""
+                        SELECT u.username, u.email, u.phone_number,
+                               ag.fecha, ag.hora_inicio, ag.hora_fin
+                        FROM cotizaciones c
+                        INNER JOIN Users u ON u.user_id = c.asesor_id
+                        LEFT JOIN agenda_asesor ag ON ag.cotizacion_id = c.cotizacion_id
+                        WHERE c.cotizacion_id = :cid
+                        LIMIT 1
+                    """),
+                    {"cid": cotizacion_id},
+                ).fetchone()
+
+                if asesor_info and asesor_info.email:
+                    asunto_asesor = f"📞 Nueva cita: COT-{cotizacion_id}"
+                    cuerpo_asesor = f"""
+                    <html>
+                      <body style="font-family: Arial, sans-serif; padding: 20px;">
+                        <h2 style="color: #b21420;">📞 Nueva cita agendada</h2>
+                        <p>Tienes una nueva llamada de asesoría:</p>
+                        <ul>
+                          <li><strong>Cotización:</strong> COT-{cotizacion_id}</li>
+                          <li><strong>Cliente:</strong> {cliente.username} ({cliente.email})</li>
+                          <li><strong>Total:</strong> ${total:,.0f} COP</li>
+                          <li><strong>Fecha:</strong> {asesor_info.fecha}</li>
+                          <li><strong>Hora:</strong> {asesor_info.hora_inicio} - {asesor_info.hora_fin}</li>
+                        </ul>
+                        <p>Revisa tu panel de asesor para más detalles.</p>
+                      </body>
+                    </html>
+                    """
+                    _enviar_correo_seguro(asesor_info.email, asunto_asesor, cuerpo_asesor, "Email al asesor")
+            except Exception as e:
+                print(f"⚠️ No se pudo notificar al asesor para COT-{cotizacion_id}: {e}")
+
+    except Exception as e:
+        print(f"❌ Error en tarea de correos de creación: {e}")
+    finally:
+        db.close() # 🔥 CRÍTICO: Cerramos la sesión para no agotar el pool de Railway
 
 # ============================================================
 # CREAR RESERVA (cliente) — por MESES + Email de confirmación
@@ -57,146 +123,24 @@ def crear_reserva(
         "observaciones": datos.observations or "",
         "items": json.dumps(items_json),
     }).fetchone()
-
     db.commit()
 
     if resultado.cotizacion_id is None:
         raise HTTPException(status_code=400, detail=resultado.mensaje)
 
-    # ─────────────────────────────────────────────
-    # 📧 Preparar y encolar emails en segundo plano
-    # ─────────────────────────────────────────────
-    cliente = db.execute(
-        text("SELECT username, email FROM Users WHERE user_id = :uid"),
-        {"uid": datos.user_id},
-    ).fetchone()
-
-    if cliente and cliente.email:
-        try:
-            cot_info = db.execute(
-                text("""
-                    SELECT total_price
-                    FROM cotizaciones WHERE cotizacion_id = :cid
-                """),
-                {"cid": resultado.cotizacion_id},
-            ).fetchone()
-
-            monto_total = float(cot_info.total_price) if cot_info and cot_info.total_price is not None else float(resultado.total)
-            requiere_asesor = monto_total > UMBRAL_ASESOR_COP
-
-            if requiere_asesor:
-                asesor_info = db.execute(
-                    text("""
-                        SELECT u.username, u.email, u.phone_number,
-                               ag.fecha, ag.hora_inicio, ag.hora_fin
-                        FROM cotizaciones c
-                        INNER JOIN Users u ON u.user_id = c.asesor_id
-                        LEFT JOIN agenda_asesor ag ON ag.cotizacion_id = c.cotizacion_id
-                        WHERE c.cotizacion_id = :cid
-                        LIMIT 1
-                    """),
-                    {"cid": resultado.cotizacion_id},
-                ).fetchone()
-
-                asunto = f"📞 Tu cotización COT-{resultado.cotizacion_id} requiere asesoría"
-                cuerpo = f"""
-                <html>
-                  <body style="font-family: Arial, sans-serif; padding: 20px;">
-                    <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; padding: 30px;">
-                      <h2 style="color: #b21420;">📞 Requiere asesoría personalizada</h2>
-
-                      <p>Hola <strong>{cliente.username}</strong>,</p>
-
-                      <p>Tu cotización <strong>COT-{resultado.cotizacion_id}</strong> supera los $30.000.000 COP.
-                      Un asesor comercial se contactará contigo en el siguiente horario laboral:</p>
-
-                      {f'''
-                      <div style="background: #fff; border-left: 4px solid #2e7d32; padding: 15px; margin: 20px 0;">
-                        <p style="margin: 0;"><strong>📅 Fecha:</strong> {asesor_info.fecha}</p>
-                        <p style="margin: 5px 0 0 0;"><strong>🕐 Hora:</strong> {asesor_info.hora_inicio} - {asesor_info.hora_fin}</p>
-                        <p style="margin: 5px 0 0 0;"><strong>👤 Asesor:</strong> {asesor_info.username}</p>
-                        <p style="margin: 5px 0 0 0;"><strong>📞 Teléfono:</strong> {asesor_info.phone_number or 'No disponible'}</p>
-                      </div>
-                      ''' if asesor_info else ''}
-
-                      <p style="color: #888; font-size: 13px;">
-                        Si no podemos contactarte, te llamaremos en el siguiente horario disponible.
-                      </p>
-
-                      <hr style="border: none; border-top: 1px solid #ddd; margin: 25px 0;">
-                      <p style="color: #999; font-size: 12px; text-align: center;">
-                        Cimentaciones y Estructuras CE-Web
-                      </p>
-                    </div>
-                  </body>
-                </html>
-                """
-
-                background_tasks.add_task(
-                    _enviar_correo_seguro,
-                    cliente.email,
-                    asunto,
-                    cuerpo,
-                    "Email de asesoría",
-                )
-
-                if asesor_info and asesor_info.email:
-                    asunto_asesor = f"📞 Nueva cita: COT-{resultado.cotizacion_id}"
-                    cuerpo_asesor = f"""
-                    <html>
-                      <body style="font-family: Arial, sans-serif; padding: 20px;">
-                        <h2 style="color: #b21420;">📞 Nueva cita agendada</h2>
-                        <p>Tienes una nueva llamada de asesoría:</p>
-                        <ul>
-                          <li><strong>Cotización:</strong> COT-{resultado.cotizacion_id}</li>
-                          <li><strong>Cliente:</strong> {cliente.username} ({cliente.email})</li>
-                          <li><strong>Total:</strong> ${monto_total:,.0f} COP</li>
-                          <li><strong>Fecha:</strong> {asesor_info.fecha}</li>
-                          <li><strong>Hora:</strong> {asesor_info.hora_inicio} - {asesor_info.hora_fin}</li>
-                        </ul>
-                        <p>Revisa tu panel de asesor para más detalles.</p>
-                      </body>
-                    </html>
-                    """
-                    background_tasks.add_task(
-                        _enviar_correo_seguro,
-                        asesor_info.email,
-                        asunto_asesor,
-                        cuerpo_asesor,
-                        "Email de cita al asesor",
-                    )
-            else:
-                asunto = f"📋 Reserva COT-{resultado.cotizacion_id} recibida"
-                cuerpo = f"""
-                <html>
-                  <body style="font-family: Arial, sans-serif; padding: 20px;">
-                    <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; padding: 30px;">
-                      <h2 style="color: #b21420;">📋 Solicitud recibida</h2>
-                      <p>Hola <strong>{cliente.username}</strong>,</p>
-                      <p>Hemos recibido tu solicitud. Un administrador la revisará pronto.</p>
-                      <p><strong>Número:</strong> COT-{resultado.cotizacion_id}</p>
-                      <p><strong>Total:</strong> ${float(resultado.total):,.0f} COP</p>
-                    </div>
-                  </body>
-                </html>
-                """
-                background_tasks.add_task(
-                    _enviar_correo_seguro,
-                    cliente.email,
-                    asunto,
-                    cuerpo,
-                    "Email de confirmación de reserva",
-                )
-
-        except Exception as e:
-            print(f"❌ Error preparando emails en crear_reserva: {e}")
+    # 🔥 ENCOLAMOS EL CORREO Y RESPONDEMOS DE INMEDIATO (Ya no hay HTML aquí)
+    background_tasks.add_task(
+        _procesar_correos_creacion,
+        resultado.cotizacion_id,
+        datos.user_id,
+        float(resultado.total)
+    )
 
     return schemas.ReservaResponse(
         cotizacion_id=resultado.cotizacion_id,
         total=float(resultado.total),
         mensaje=resultado.mensaje,
     )
-
 
 # ============================================================
 # RESERVAS PENDIENTES (admin)
@@ -205,21 +149,11 @@ def crear_reserva(
 def listar_reservas_pendientes(db: Session = Depends(get_db)):
     query = text("""
         SELECT
-            c.cotizacion_id,
-            c.user_id,
-            u.username,
-            u.email AS cliente_email,
-            c.start_date,
-            c.end_date,
-            (EXTRACT(YEAR FROM age(c.end_date, c.start_date)) * 12 +
-             EXTRACT(MONTH FROM age(c.end_date, c.start_date)))::INT AS months,
-            c.total_price,
-            c.status,
-            c.observations,
-            c.approved_by,
-            c.approved_at,
-            c.rejection_reason,
-            c.notificado_vencimiento,
+            c.cotizacion_id, c.user_id, u.username, u.email AS cliente_email,
+            c.start_date, c.end_date,
+            (EXTRACT(YEAR FROM age(c.end_date, c.start_date)) * 12 + EXTRACT(MONTH FROM age(c.end_date, c.start_date)))::INT AS months,
+            c.total_price, c.status, c.observations, c.approved_by, c.approved_at,
+            c.rejection_reason, c.notificado_vencimiento,
             (c.end_date - CURRENT_DATE)::INT AS dias_restantes
         FROM cotizaciones c
         INNER JOIN Users u ON u.user_id = c.user_id
@@ -228,7 +162,6 @@ def listar_reservas_pendientes(db: Session = Depends(get_db)):
     """)
     return [dict(r._mapping) for r in db.execute(query).fetchall()]
 
-
 # ============================================================
 # MIS RESERVAS (cliente)
 # ============================================================
@@ -236,21 +169,11 @@ def listar_reservas_pendientes(db: Session = Depends(get_db)):
 def listar_mis_reservas(user_id: int, db: Session = Depends(get_db)):
     query = text("""
         SELECT
-            c.cotizacion_id,
-            c.user_id,
-            u.username,
-            u.email AS cliente_email,
-            c.start_date,
-            c.end_date,
-            (EXTRACT(YEAR FROM age(c.end_date, c.start_date)) * 12 +
-             EXTRACT(MONTH FROM age(c.end_date, c.start_date)))::INT AS months,
-            c.total_price,
-            c.status,
-            c.observations,
-            c.approved_by,
-            c.approved_at,
-            c.rejection_reason,
-            c.notificado_vencimiento,
+            c.cotizacion_id, c.user_id, u.username, u.email AS cliente_email,
+            c.start_date, c.end_date,
+            (EXTRACT(YEAR FROM age(c.end_date, c.start_date)) * 12 + EXTRACT(MONTH FROM age(c.end_date, c.start_date)))::INT AS months,
+            c.total_price, c.status, c.observations, c.approved_by, c.approved_at,
+            c.rejection_reason, c.notificado_vencimiento,
             (c.end_date - CURRENT_DATE)::INT AS dias_restantes
         FROM cotizaciones c
         INNER JOIN Users u ON u.user_id = c.user_id
@@ -259,7 +182,6 @@ def listar_mis_reservas(user_id: int, db: Session = Depends(get_db)):
     """)
     return [dict(r._mapping) for r in db.execute(query, {"user_id": user_id}).fetchall()]
 
-
 # ============================================================
 # RESERVAS POR VENCER (admin — para badge/email)
 # ============================================================
@@ -267,21 +189,11 @@ def listar_mis_reservas(user_id: int, db: Session = Depends(get_db)):
 def listar_por_vencer(db: Session = Depends(get_db)):
     query = text("""
         SELECT
-            c.cotizacion_id,
-            c.user_id,
-            u.username,
-            u.email AS cliente_email,
-            c.start_date,
-            c.end_date,
-            (EXTRACT(YEAR FROM age(c.end_date, c.start_date)) * 12 +
-             EXTRACT(MONTH FROM age(c.end_date, c.start_date)))::INT AS months,
-            c.total_price,
-            c.status,
-            c.observations,
-            c.approved_by,
-            c.approved_at,
-            c.rejection_reason,
-            c.notificado_vencimiento,
+            c.cotizacion_id, c.user_id, u.username, u.email AS cliente_email,
+            c.start_date, c.end_date,
+            (EXTRACT(YEAR FROM age(c.end_date, c.start_date)) * 12 + EXTRACT(MONTH FROM age(c.end_date, c.start_date)))::INT AS months,
+            c.total_price, c.status, c.observations, c.approved_by, c.approved_at,
+            c.rejection_reason, c.notificado_vencimiento,
             (c.end_date - CURRENT_DATE)::INT AS dias_restantes
         FROM cotizaciones c
         INNER JOIN Users u ON u.user_id = c.user_id
@@ -290,7 +202,6 @@ def listar_por_vencer(db: Session = Depends(get_db)):
         ORDER BY c.end_date ASC
     """)
     return [dict(r._mapping) for r in db.execute(query).fetchall()]
-
 
 # ============================================================
 # APROBAR RESERVA (admin) + Email al cliente
@@ -302,17 +213,10 @@ def aprobar_reserva(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Aprueba una reserva y encola el email de confirmación al cliente."""
-
     info = db.execute(
         text("""
-            SELECT
-                c.cotizacion_id,
-                c.start_date,
-                c.end_date,
-                c.total_price,
-                u.username,
-                u.email AS cliente_email
+            SELECT c.cotizacion_id, c.start_date, c.end_date, c.total_price,
+                   u.username, u.email AS cliente_email
             FROM cotizaciones c
             INNER JOIN Users u ON u.user_id = c.user_id
             WHERE c.cotizacion_id = :cid
@@ -336,55 +240,25 @@ def aprobar_reserva(
           <body style="font-family: Arial, sans-serif; padding: 20px;">
             <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; padding: 30px;">
               <h2 style="color: #2e7d32;">✅ ¡Tu reserva fue aprobada!</h2>
-
               <p>Hola <strong>{info.username}</strong>,</p>
-
               <p>Tu reserva ha sido aprobada por un administrador. Aquí los detalles:</p>
-
               <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                <tr>
-                  <td style="padding: 8px 0; color: #666;">Número:</td>
-                  <td style="padding: 8px 0;"><strong>COT-{cotizacion_id}</strong></td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; color: #666;">Fecha de inicio:</td>
-                  <td style="padding: 8px 0;"><strong>{info.start_date}</strong></td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; color: #666;">Fecha de fin:</td>
-                  <td style="padding: 8px 0;"><strong>{info.end_date}</strong></td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px 0; color: #666;">Total:</td>
-                  <td style="padding: 8px 0;"><strong>${float(info.total_price):,.0f} COP</strong></td>
-                </tr>
+                <tr><td style="padding: 8px 0; color: #666;">Número:</td><td style="padding: 8px 0;"><strong>COT-{cotizacion_id}</strong></td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Fecha de inicio:</td><td style="padding: 8px 0;"><strong>{info.start_date}</strong></td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Fecha de fin:</td><td style="padding: 8px 0;"><strong>{info.end_date}</strong></td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Total:</td><td style="padding: 8px 0;"><strong>${float(info.total_price):,.0f} COP</strong></td></tr>
               </table>
-
               <p>Puedes pasar a retirar tu maquinaria o herramienta en la fecha acordada.</p>
-
-              <p style="color: #888; font-size: 13px;">
-                Recuerda que 3 días antes del vencimiento te avisaremos para coordinar la devolución.
-              </p>
-
+              <p style="color: #888; font-size: 13px;">Recuerda que 3 días antes del vencimiento te avisaremos para coordinar la devolución.</p>
               <hr style="border: none; border-top: 1px solid #ddd; margin: 25px 0;">
-              <p style="color: #999; font-size: 12px; text-align: center;">
-                Cimentaciones y Estructuras CE-Web
-              </p>
+              <p style="color: #999; font-size: 12px; text-align: center;">Cimentaciones y Estructuras CE-Web</p>
             </div>
           </body>
         </html>
         """
-
-        background_tasks.add_task(
-            _enviar_correo_seguro,
-            info.cliente_email,
-            asunto,
-            cuerpo,
-            "Email de aprobación",
-        )
+        background_tasks.add_task(_enviar_correo_seguro, info.cliente_email, asunto, cuerpo, "Email de aprobación")
 
     return {"mensaje": resultado.msg}
-
 
 # ============================================================
 # RECHAZAR RESERVA (admin) + Email al cliente
@@ -396,14 +270,9 @@ def rechazar_reserva(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Rechaza una reserva y encola el email al cliente con el motivo."""
-
     info = db.execute(
         text("""
-            SELECT
-                c.cotizacion_id,
-                u.username,
-                u.email AS cliente_email
+            SELECT c.cotizacion_id, u.username, u.email AS cliente_email
             FROM cotizaciones c
             INNER JOIN Users u ON u.user_id = c.user_id
             WHERE c.cotizacion_id = :cid
@@ -413,11 +282,7 @@ def rechazar_reserva(
 
     resultado = db.execute(
         text("SELECT fn_rechazar_reserva(:cid, :aid, :motivo) AS msg"),
-        {
-            "cid": cotizacion_id,
-            "aid": datos.admin_id,
-            "motivo": datos.motivo,
-        },
+        {"cid": cotizacion_id, "aid": datos.admin_id, "motivo": datos.motivo},
     ).fetchone()
     db.commit()
 
@@ -431,37 +296,20 @@ def rechazar_reserva(
           <body style="font-family: Arial, sans-serif; padding: 20px;">
             <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; padding: 30px;">
               <h2 style="color: #d32f2f;">❌ Reserva rechazada</h2>
-
               <p>Hola <strong>{info.username}</strong>,</p>
-
               <p>Lamentablemente tu reserva <strong>COT-{cotizacion_id}</strong> no pudo ser aprobada.</p>
-
               <p><strong>Motivo:</strong></p>
-              <p style="background: #fff; border-left: 3px solid #d32f2f; padding: 10px 15px; font-style: italic;">
-                "{datos.motivo}"
-              </p>
-
+              <p style="background: #fff; border-left: 3px solid #d32f2f; padding: 10px 15px; font-style: italic;">"{datos.motivo}"</p>
               <p>Puedes intentar con otras fechas u otro equipo. Si tienes dudas, contáctanos.</p>
-
               <hr style="border: none; border-top: 1px solid #ddd; margin: 25px 0;">
-              <p style="color: #999; font-size: 12px; text-align: center;">
-                Cimentaciones y Estructuras CE-Web
-              </p>
+              <p style="color: #999; font-size: 12px; text-align: center;">Cimentaciones y Estructuras CE-Web</p>
             </div>
           </body>
         </html>
         """
-
-        background_tasks.add_task(
-            _enviar_correo_seguro,
-            info.cliente_email,
-            asunto,
-            cuerpo,
-            "Email de rechazo",
-        )
+        background_tasks.add_task(_enviar_correo_seguro, info.cliente_email, asunto, cuerpo, "Email de rechazo")
 
     return {"mensaje": resultado.msg}
-
 
 # ============================================================
 # DISPONIBILIDAD
@@ -489,7 +337,6 @@ def consultar_disponibilidad(
         mensaje=f"{resultado.disponibles} unidades disponibles",
     )
 
-
 # ============================================================
 # MARCAR NOTIFICADA
 # ============================================================
@@ -502,29 +349,19 @@ def marcar_notificada(cotizacion_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"mensaje": resultado.msg}
 
-
 # ============================================================
 # EJECUTAR TAREA DIARIA (manual, para pruebas)
 # ============================================================
 @router.post("/ejecutar-tarea-diaria")
 def ejecutar_tarea_diaria_manual():
-    """
-    Ejecuta manualmente la tarea que normalmente corre a las 8 AM.
-    Se ejecuta de forma SÍNCRONA para evitar problemas con asyncio.
-    """
     from model.scheduler import ejecutar_tarea_diaria
-
     try:
         resultado = ejecutar_tarea_diaria()
-        return {
-            "mensaje": "Tarea diaria ejecutada correctamente",
-            "detalles": resultado,
-        }
+        return {"mensaje": "Tarea diaria ejecutada correctamente", "detalles": resultado}
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error en tarea diaria: {str(e)}")
-
 
 # ============================================================
 # RESERVAS EN CURSO (admin) — approved y active
@@ -533,27 +370,15 @@ def ejecutar_tarea_diaria_manual():
 def listar_reservas_en_curso(db: Session = Depends(get_db)):
     query = text("""
         SELECT
-            c.cotizacion_id,
-            c.user_id,
-            u.username,
-            u.email AS cliente_email,
-            c.start_date,
-            c.end_date,
-            (EXTRACT(YEAR FROM age(c.end_date, c.start_date)) * 12 +
-             EXTRACT(MONTH FROM age(c.end_date, c.start_date)))::INT AS months,
-            c.total_price,
-            c.status,
-            c.observations,
-            c.approved_by,
-            c.approved_at,
-            c.rejection_reason,
-            c.notificado_vencimiento,
+            c.cotizacion_id, c.user_id, u.username, u.email AS cliente_email,
+            c.start_date, c.end_date,
+            (EXTRACT(YEAR FROM age(c.end_date, c.start_date)) * 12 + EXTRACT(MONTH FROM age(c.end_date, c.start_date)))::INT AS months,
+            c.total_price, c.status, c.observations, c.approved_by, c.approved_at,
+            c.rejection_reason, c.notificado_vencimiento,
             (c.end_date - CURRENT_DATE)::INT AS dias_restantes
         FROM cotizaciones c
         INNER JOIN Users u ON u.user_id = c.user_id
         WHERE c.status IN ('approved', 'active')
-        ORDER BY
-            CASE c.status WHEN 'active' THEN 1 WHEN 'approved' THEN 2 END,
-            c.start_date ASC
+        ORDER BY CASE c.status WHEN 'active' THEN 1 WHEN 'approved' THEN 2 END, c.start_date ASC
     """)
     return [dict(r._mapping) for r in db.execute(query).fetchall()]
