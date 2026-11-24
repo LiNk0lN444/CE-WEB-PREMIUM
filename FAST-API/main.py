@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.database import Base, engine
 from model.routers import all_routers
-from model.scheduler import iniciar_scheduler, detener_scheduler   # 👈 NUEVO
+from model.scheduler import iniciar_scheduler, detener_scheduler   # 👈 NUEVO   
 
 try:
     Base.metadata.create_all(bind=engine)
