@@ -7,6 +7,8 @@ import AuthPage from './components/AuthPage';
 import ReservasAdmin from './components/ReservasAdmin';
 import CotizacionesAdmin from './components/CotizacionesAdmin';
 import PanelAsesor from './components/panelAsesor';
+import UsuariosAdmin from './components/UsuariosAdmin';
+import ReportesAdmin from './components/ReportesAdmin';
 import { obtenerReservasPendientes } from './services/api';
 
 export default function App() {
@@ -53,6 +55,14 @@ export default function App() {
       mostrarToast('Acceso restringido. Solo administradores. 🔒', 'error');
       setVistaActual('inicio');
     }
+    if (vistaActual === 'usuarios-admin' && !esAdmin) {
+      mostrarToast('Acceso restringido. Solo administradores. 🔒', 'error');
+      setVistaActual('inicio');
+    }
+    if (vistaActual === 'reportes-admin' && !esAdmin) {
+      mostrarToast('Acceso restringido. Solo administradores. 🔒', 'error');
+      setVistaActual('inicio');
+    }
     if (vistaActual === 'panel-asesor' && !esAsesor) {
       mostrarToast('Acceso restringido. Solo asesores. 🔒', 'error');
       setVistaActual('inicio');
@@ -77,6 +87,17 @@ export default function App() {
     mostrarToast(`¡Bienvenido de nuevo, ${usuario.username || 'Usuario'}! 👋`);
     setVistaActual('inicio');
   };
+
+  // 🔐 Si el backend dice que la sesión venció (token expirado/inválido), cerramos sesión
+  useEffect(() => {
+    const onExpirada = () => {
+      setUsuarioSesion(null);
+      mostrarToast('Tu sesión expiró. Inicia sesión de nuevo. 🔑', 'error');
+      setVistaActual('login');
+    };
+    window.addEventListener('ce-session-expired', onExpirada);
+    return () => window.removeEventListener('ce-session-expired', onExpirada);
+  }, []);
 
   const handleCerrarSesion = () => {
     setUsuarioSesion(null);
@@ -161,6 +182,30 @@ export default function App() {
                   onClick={() => setVistaActual('reservas-admin')}
                 >
                   Reservas en Curso 🚚
+                </button>
+              </li>
+            )}
+
+            {/* ── Usuarios (solo admin) ── */}
+            {esAdmin && (
+              <li>
+                <button
+                  className={vistaActual === 'usuarios-admin' ? 'active' : ''}
+                  onClick={() => setVistaActual('usuarios-admin')}
+                >
+                  Usuarios 👥
+                </button>
+              </li>
+            )}
+
+            {/* ── Reportes de ventas (solo admin) ── */}
+            {esAdmin && (
+              <li>
+                <button
+                  className={vistaActual === 'reportes-admin' ? 'active' : ''}
+                  onClick={() => setVistaActual('reportes-admin')}
+                >
+                  Reportes 📊
                 </button>
               </li>
             )}
@@ -323,6 +368,20 @@ export default function App() {
         ═══════════════════════════════════════════ */}
         {vistaActual === 'reservas-admin' && esAdmin && (
           <ReservasAdmin darkMode={darkMode} />
+        )}
+
+        {/* ═══════════════════════════════════════════
+            VISTA: USUARIOS (solo admin)
+        ═══════════════════════════════════════════ */}
+        {vistaActual === 'usuarios-admin' && esAdmin && (
+          <UsuariosAdmin darkMode={darkMode} />
+        )}
+
+        {/* ═══════════════════════════════════════════
+            VISTA: REPORTES DE VENTAS (solo admin)
+        ═══════════════════════════════════════════ */}
+        {vistaActual === 'reportes-admin' && esAdmin && (
+          <ReportesAdmin darkMode={darkMode} />
         )}
 
         {/* ═══════════════════════════════════════════

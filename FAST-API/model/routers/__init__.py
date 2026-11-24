@@ -1,7 +1,8 @@
 from . import usuarios, auth, productos, inventario, movimientos_inventario
 from . import cotizaciones, detalle_cotizaciones, billing, auditoria
 from . import reservas 
-from . import asesores                   
+from . import asesores
+from . import admin_usuarios, reportes
 
 all_routers = [
     usuarios.router,
@@ -14,6 +15,8 @@ all_routers = [
     billing.router,
     auditoria.router,
     reservas.router,    
-    asesores.router,                  
+    asesores.router,
+    admin_usuarios.router,
+    reportes.router,
 ]
 

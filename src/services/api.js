@@ -11,29 +11,60 @@ if (!API_URL && import.meta.env.DEV) {
 }
 
 // ==========================================
+// SESIÓN (token JWT guardado al iniciar sesión)
+// ==========================================
+function getToken() {
+  try {
+    return JSON.parse(localStorage.getItem('usuario_sesion'))?.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
+// Si el backend responde 401 con un token guardado, la sesión venció o dejó de ser válida:
+// se limpia y se avisa a la app (app.jsx escucha este evento y cierra la sesión).
+function sesionExpirada() {
+  localStorage.removeItem('usuario_sesion');
+  window.dispatchEvent(new Event('ce-session-expired'));
+}
+
+async function leerError(response) {
+  let mensaje = 'No fue posible completar la solicitud.';
+  try {
+    const errorData = await response.json();
+    if (typeof errorData.detail === 'string') {
+      mensaje = errorData.detail;
+    } else if (Array.isArray(errorData.detail) && errorData.detail[0]?.msg) {
+      mensaje = errorData.detail[0].msg; // errores de validación (422)
+    }
+  } catch {
+    // Respuesta sin JSON
+  }
+  return mensaje;
+}
+
+// ==========================================
 // FUNCIÓN GENERAL PARA PETICIONES
 // ==========================================
 async function request(endpoint, options = {}) {
   try {
+    const { headers: extraHeaders, ...rest } = options;
+    const token = getToken();
+
     const response = await fetch(`${API_URL}${endpoint}`, {
+      ...rest,
       headers: {
         'Content-Type': 'application/json',
-        ...options.headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...extraHeaders,
       },
-      ...options,
     });
 
     if (!response.ok) {
-      let errorMessage = 'No fue posible completar la solicitud.';
-
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorMessage;
-      } catch {
-        // Respuesta sin JSON
+      if (response.status === 401 && token && endpoint !== '/auth/login') {
+        sesionExpirada();
       }
-
-      throw new Error(errorMessage);
+      throw new Error(await leerError(response));
     }
 
     if (response.status === 204) {
@@ -109,16 +140,59 @@ export async function crearMovimiento(datos) {
 // ==========================================
 // USERS
 // ==========================================
-export async function obtenerUsuarios() {
-  return request('/users/');
-}
-
-export async function obtenerUsuario(userId) {
-  return request(`/users/${userId}`);
-}
-
+// Registro público (siempre crea un cliente)
 export async function crearUsuario(datos) {
   return request('/users/', { method: 'POST', body: JSON.stringify(datos) });
+}
+
+// ==========================================
+// ADMIN — GESTIÓN DE USUARIOS (solo admin; los admins nunca vienen en la lista)
+// ==========================================
+export async function adminListarUsuarios() {
+  return request('/admin/users/');
+}
+
+export async function adminCrearUsuario(datos) {
+  return request('/admin/users/', { method: 'POST', body: JSON.stringify(datos) });
+}
+
+export async function adminActualizarUsuario(userId, datos) {
+  return request(`/admin/users/${userId}`, { method: 'PUT', body: JSON.stringify(datos) });
+}
+
+export async function adminEliminarUsuario(userId) {
+  return request(`/admin/users/${userId}`, { method: 'DELETE' });
+}
+
+// ==========================================
+// ADMIN — REPORTES DE VENTAS
+// ==========================================
+export async function obtenerReporteVentas(year, month) {
+  return request(`/admin/reportes/ventas-mensuales?year=${year}&month=${month}`);
+}
+
+// Descarga el reporte (xlsx | pdf). Usa fetch directo porque la respuesta es un archivo.
+export async function descargarReporteVentas(year, month, formato) {
+  const token = getToken();
+  const response = await fetch(
+    `${API_URL}/admin/reportes/ventas-mensuales/export?formato=${formato}&year=${year}&month=${month}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+  );
+
+  if (!response.ok) {
+    if (response.status === 401 && token) sesionExpirada();
+    throw new Error(await leerError(response));
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reporte_ventas_${year}-${String(month).padStart(2, '0')}.${formato}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ==========================================
