@@ -10,13 +10,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.database import Base, engine
 from model.routers import all_routers
-from model.scheduler import iniciar_scheduler, detener_scheduler   # 👈 NUEVO   
+from model.scheduler import iniciar_scheduler, detener_scheduler
 
 try:
     Base.metadata.create_all(bind=engine)
 except Exception as e:
     print(f"Nota: Verificación de tablas omitida o ya existentes: {e}")
-
 
 app = FastAPI(
     title="CE Web API",
@@ -24,10 +23,11 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# 🔥 CONFIGURACIÓN DE CORS CORREGIDA PARA VERCEL
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["*"],        # Permite cualquier origen
+    allow_credentials=False,    # 🚨 CRÍTICO: Debe ser False cuando usas "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -35,11 +35,9 @@ app.add_middleware(
 for router in all_routers:
     app.include_router(router)
 
-
 @app.get("/")
 def root():
     return {"mensaje": "API CE Web funcionando correctamente"}
-
 
 # ─────────────────────────────────────────
 # Scheduler de tareas diarias
@@ -47,7 +45,6 @@ def root():
 @app.on_event("startup")
 async def startup_event():
     iniciar_scheduler()
-
 
 @app.on_event("shutdown")
 async def shutdown_event():
