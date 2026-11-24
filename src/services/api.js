@@ -1,7 +1,7 @@
 // ==========================================
 // CONFIGURACIÓN DE LA API (Vite)
 // ==========================================
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://vigilant-optimism-production-d95e4a0f.up.railway.app';
 
 if (!API_URL && import.meta.env.DEV) {
   console.info(
