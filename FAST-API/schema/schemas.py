@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr, ConfigDict
-from typing import Optional
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from typing import Optional, Literal
 from datetime import datetime
 from datetime import date
 from typing import List
@@ -209,6 +209,8 @@ class LoginResponse(BaseModel):
     phone_number: Optional[str] = None
     status: str
     role: str
+    access_token: Optional[str] = None   # 👈 token JWT de la sesión
+    token_type: str = "bearer"
 # ==========================================
 # RESERVAS (sistema por meses)
 # ==========================================
@@ -435,3 +437,36 @@ class CitaResponse(BaseModel):
 class CitaEstadoUpdate(BaseModel):
     estado: str
     notas: Optional[str] = None
+
+
+# ==========================================
+# ADMIN: GESTIÓN DE USUARIOS
+# ==========================================
+class AdminUserCreate(BaseModel):
+    """El rol NO se recibe: los usuarios creados por el admin siempre son 'client'.
+    (Los asesores se promueven desde el módulo de asesores; no se crean admins desde la app.)"""
+    username: str = Field(min_length=2, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=6, max_length=72)
+    phone_number: Optional[str] = Field(default=None, max_length=15)
+    status: Literal["active", "inactive"] = "active"
+
+
+class AdminUserUpdate(BaseModel):
+    username: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    email: Optional[EmailStr] = None
+    password: Optional[str] = Field(default=None, min_length=6, max_length=72)  # opcional
+    phone_number: Optional[str] = Field(default=None, max_length=15)
+    status: Optional[Literal["active", "inactive"]] = None
+
+
+class AdminUserResponse(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    phone_number: Optional[str] = None
+    status: str
+    role: str
+    date_registered: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
