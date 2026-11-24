@@ -1,18 +1,16 @@
-# model/security.py
-from passlib.context import CryptContext
+from datetime import datetime, timedelta
+from jose import jwt
+import os
 
-# Configuración del hasher
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY = os.getenv("SECRET_KEY", "tu_clave_secreta_super_segura")
+ALGORITHM = "HS256"
 
-
-def hash_password(password: str) -> str:
-    """Convierte una contraseña en texto plano a un hash seguro."""
-    return pwd_context.hash(password)
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica si una contraseña coincide con su hash."""
-    try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except Exception:
-        return False
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=1440) # 1 día
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
