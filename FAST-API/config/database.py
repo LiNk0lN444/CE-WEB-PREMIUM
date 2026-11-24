@@ -23,7 +23,7 @@ if not DATABASE_URL:
         "Crea un archivo .env en la raíz de FAST-API basándote en .env.example"
     )
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://"))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
