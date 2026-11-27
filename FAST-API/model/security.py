@@ -17,15 +17,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifica si la contraseña ingresada coincide con la encriptada."""
     return pwd_context.verify(plain_password, hashed_password)
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
+def create_access_token(user_id: int, role: str, expires_delta: timedelta = None):
     """Genera el token JWT para el inicio de sesión."""
-    to_encode = data.copy()
+    # Creamos el diccionario con los datos que espera FastAPI
+    to_encode = {"sub": str(user_id), "role": role}
+    
     if expires_delta:
-        # Se usa datetime.now(timezone.utc) para evitar el warning de utcnow
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=1440) # 1 día
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt   
+    return encoded_jwt
