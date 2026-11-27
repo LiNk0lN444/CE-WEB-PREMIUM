@@ -1,6 +1,29 @@
-
+# Python
+__pycache__/
 *.pyc
-src.zip
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+
+# Variables de entorno (Secretos)
 .env
 .env.local
 .env.*.local
+
+# Node / React / Vite
+node_modules/
+dist/
+build/
+*.log
+
+# Sistema operativo / Editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Archivos comprimidos
+src.zip
