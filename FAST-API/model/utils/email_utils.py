@@ -1,31 +1,48 @@
-import smtplib
 import os
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 def enviar_correo(destinatario: str, asunto: str, cuerpo_html: str) -> bool:
-    remitente = os.getenv("GMAIL_USER")
-    password = os.getenv("GMAIL_APP_PASSWORD")
+    remitente = os.getenv("GMAIL_SENDER_EMAIL") or os.getenv("GMAIL_USER")
+    client_id = os.getenv("GMAIL_CLIENT_ID")
+    client_secret = os.getenv("GMAIL_CLIENT_SECRET")
+    refresh_token = os.getenv("GMAIL_REFRESH_TOKEN")
 
-    if not remitente or not password:
-        print("⚠️ Faltan credenciales de Gmail (GMAIL_USER o GMAIL_APP_PASSWORD) en las variables.")
+    if not all([remitente, client_id, client_secret, refresh_token]):
+        print("⚠️ Faltan credenciales OAuth de Gmail en variables de entorno.")
         return False
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = asunto
     msg["From"] = f"Cimentaciones y Estructuras CE-Web <{remitente}>"
     msg["To"] = destinatario
-    
+
     parte_html = MIMEText(cuerpo_html, "html")
     msg.attach(parte_html)
 
     try:
-        context = smtplib.ssl.create_default_context()
-        # El timeout=10 evita que el servidor se quede colgado
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=10) as servidor:
-            servidor.login(remitente, password)
-            servidor.sendmail(remitente, destinatario, msg.as_string())
-        print(f"✅ Correo enviado a {destinatario}")
+        # 🔥 CONEXIÓN POR HTTPS (Puerto 443, permitido en Railway)
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=["https://www.googleapis.com/auth/gmail.send"]
+        )
+
+        servicio = build("gmail", "v1", credentials=creds)
+        mensaje_codificado = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+
+        servicio.users().messages().send(
+            userId="me",
+            body={"raw": mensaje_codificado}
+        ).execute()
+
+        print(f"✅ Correo enviado exitosamente a {destinatario}")
         return True
     except Exception as e:
         print(f"❌ Error enviando correo: {e}")
